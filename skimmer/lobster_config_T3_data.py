@@ -20,35 +20,41 @@ print(top_dir)
 sandbox_location = "/afs/crc.nd.edu/user/a/apiccine/LobPY3/LobsterSkimming/CMSSW_14_0_6"
 #sandbox_location = "/afs/crc.nd.edu/user/a/apiccine/Lobster-With-Conda/LobsterSkimming/CMSSW_14_0_6"
 
-testing = True
+testing = False
 
-step = "run3skims"
-tag = "data/NAOD_ULv12_lepMVA-run3/2022/Full"               # Not used if in "testing" mode
-#ver = "v1"
+step = "run3skimsT3"
 ver = "v{}".format(startingday)
 
-cfg_name = "2022_data_samples.cfg"
-#cfg_name = "mc_signal_samples.cfg"
+# tag is Not used if in "testing" mode
+#tag = "data/NAOD_ULv12_lepMVA-run3/2022/Full" 
+#cfg_name = "2022_data.cfg"
+#tag = "data/NAOD_ULv12_lepMVA-run3/2022EE/Full" 
+#cfg_name = "2022EE_data.cfg"
+#tag = "data/NAOD_ULv12_lepMVA-run3/2023/Full" 
+#cfg_name = "2023_data.cfg"
+tag = "data/NAOD_ULv12_lepMVA-run3/2023BPix/Full" 
+cfg_name = "2023BPix_data.cfg"
 
 cfg_fpath = os.path.join(top_dir,"topeft/input_samples/cfgs",cfg_name)
-
+print(cfg_fpath)
 # Only process json files that match these regexs (empty list matches everything)
+match = ['.*.json']
 #match = ['.*UL2018\\.json']
-match = ['.*EGamma_D.*22Sep2023\\.json']
+#match = ['.*ND_\\.json']
 #match = ['.*Muon.*22Sep2023\\.json']
 # match = ['DoubleEG_F-UL2016\\.json']
 # match = ['MuonEG_B-UL2017\\.json']
 
-skim_cut = "nMuon+nElectron+nTau>=2" #&& Sum$( Muon_looseId && Muon_miniPFRelIso_all < 0.4 && Muon_sip3d <8) + Sum$(Electron_miniPFRelIso_all < 0.4 && Electron_sip3d <8 && Electron_mvaFall17V2noIso_WPL) >=2'"
+skim_cut = "nMuon+nElectron+nTau>=2&&Sum\$(Muon_looseId&&Muon_miniPFRelIso_all<0.4&&Muon_sip3d<8)+Sum\$(Electron_miniPFRelIso_all<0.4&&Electron_sip3d<8)+Sum\$(Tau_idDeepTau2018v2p5VSe>1&&Tau_idDeepTau2018v2p5VSmu>0&&Tau_idDeepTau2018v2p5VSjet>1)>=2"
 
-master_label = '{step}_lobPY3_{tstamp}'.format(step=step,tstamp=TSTAMP1)
-workdir_path = "{path}/{step}/{tag}/{ver}".format(step=step,tag=tag,ver=ver,path="/tmpscratch/users/$USER")
+master_label = '{step}_lobPY3_{cfg}_{tstamp}'.format(step=step,cfg=cfg_name.split(".")[0],tstamp=TSTAMP1)
+workdir_path = "{path}/{step}/{tag}/{ver}".format(step=step,tag=tag,ver=ver,path="/scratch365/$USER")
 plotdir_path = "{path}/{step}/{tag}/{ver}".format(step=step,tag=tag,ver=ver,path="~/www/lobster")
 output_path  = "{path}/{step}/{tag}/{ver}".format(step=step,tag=tag,ver=ver,path="/store/user/$USER")
 
 if testing:
     master_label = '{step}_testlobPY3_{tstamp}'.format(step=step,tstamp=TSTAMP1)
-    workdir_path = "{path}/{step}/test/lobster_skimtest_{tstamp}".format(step=step,tstamp=TSTAMP1,path="/tmpscratch/users/$USER")
+    workdir_path = "{path}/{step}/test/lobster_skimtest_{tstamp}".format(step=step,tstamp=TSTAMP1,path="/scratch365/$USER")
     plotdir_path = "{path}/{step}/test/lobster_skimtest_{tstamp}".format(step=step,tstamp=TSTAMP1,path="~/www/lobster")
     output_path  = "{path}/{step}/test/lobster_skimtest_{tstamp}".format(step=step,tstamp=TSTAMP1,path="/store/user/$USER")
 
@@ -60,11 +66,12 @@ xrd_dst = "hactar01.crc.nd.edu"
 
 storage_base = StorageConfiguration(
     input=[
-        "root://{host}//".format(host=xrd_src)  # Note the extra slash after the hostname
+        "file:///cms/cephfs/data/",
+        #"root://{host}//".format(host=xrd_src)  # Note the extra slash after the hostname
     ],
     output=[
         f"file:///cms/cephfs/data/{output_path}",
-        f"root://{xrd_dst}/{output_path}",
+        #f"root://{xrd_dst}/{output_path}",
     ],
     #disable_input_streaming=True,
 )
@@ -78,6 +85,7 @@ storage_cmssw = StorageConfiguration(
     #disable_input_streaming=True,
 )
 
+#storage = storage_cmssw
 storage = storage_base
 
 # See tools/utils.py for dict structure of returned object
@@ -86,32 +94,37 @@ cfg = read_cfg(cfg_fpath,match=match)
 cat = Category(
     name='processing',
     cores=1,
-    memory=1500,
-    disk=4500,
+    memory=10000,
+    disk=8000,
 )
 
+skim_cut = skim_cut.replace(">", "\>").replace("<", "\<").replace(" ", "")
 wf = []
 for sample in sorted(cfg['jsons']):
     jsn = cfg['jsons'][sample]
-    print(("Sample: {}".format(sample)))
+    year = jsn['year']
+    print("Sample: {}".format(sample))
     for fn in jsn['files']:
-        print(("\t{}".format(fn)))
-    files = [x.replace('/store/','') for x in jsn['files']]
+        print("\t{}".format(fn))
+    #files = [x.replace('/store/','') for x in jsn['files']]
+    files = [x for x in jsn['files']]
     module_name = ''
-    if 'HIPM_UL2016' in sample:
+    if '16' in year:
         module_name = 'lepMVA_2016_preVFP'
-    elif 'UL2017' in sample:
+    elif '17' in year:
         module_name = 'lepMVA_2017'
-    elif 'UL2018' in sample:
+    elif '18' in year:
         module_name = 'lepMVA_2018'
-    elif '2022' or '2023' in sample:
+    elif '2022' or '2023' in year:
         module_name = 'lepMVA'
     else:
         module_name = 'lepMVA_2016'
         
     ds_base = Dataset(
         files=files,
-        files_per_task=1
+        files_per_task=1,
+        patterns=["*.root"],
+        #file_based=True
     )
 
     ds_cmssw = cmssw.Dataset(
@@ -120,25 +133,24 @@ for sample in sorted(cfg['jsons']):
         file_based=True
     )
 
-    ds = ds_cmssw
+    ds = ds_base
 
-    skim_cut = skim_cut.replace(">", "\>").replace("<", "\<")
-    cmd = ['python3','skim_wrapper.py']
+    cmd = ['python3','skim_wrapper_T3.py']
     cmd.extend(['--cut',skim_cut])
     cmd.extend(['--module',module_name])
     cmd.extend(['--out-dir','.'])
     cmd.extend(['@inputfiles'])
 
-    print("\n\n\n")
-    print(("Command to execute:", ' '.join(cmd)))
-    print("\n\n\n")
+    #print("\n\n\n")
+    #print("Command to execute:", ' '.join(cmd))
+    #print("\n\n\n")
 
     skim_wf = Workflow(
         label=sample.replace('-','_'),
         sandbox=cmssw.Sandbox(release=sandbox_location),
-        dataset=ds_cmssw,
+        dataset=ds,
         category=cat,
-        extra_inputs=['skim_wrapper.py'], #,os.path.join(sandbox_location,'src/PhysicsTools/NanoAODTools/scripts/haddnano.py')],
+        extra_inputs=['skim_wrapper_T3.py'], #,os.path.join(sandbox_location,'src/PhysicsTools/NanoAODTools/scripts/haddnano.py')],
         outputs=['output.root'],
         command=' '.join(cmd),
         #merge_command='python haddnano.py @outputfiles @inputfiles',
@@ -160,25 +172,7 @@ config = Config(
         log_level=1,
         payload=10,
 	osg_version='3.6',
-        threshold_for_failure=1,
-	threshold_for_skipping=1,
+        threshold_for_failure=50,
+	threshold_for_skipping=50,
     )
 )
-    
-#config = Config(
-#    label=master_label,
-#    workdir=workdir_path,
-#    plotdir=plotdir_path,
-#    storage=storage,
-#    workflows=wf,
-#    advanced=AdvancedOptions(
-#        dashboard=False, # Important to avoid a crash caused by out of date WMCore
-#        bad_exit_codes=[127, 160],
-#        log_level=1,
-#        payload=10,#3        xrootd_servers=[
-#            'ndcms.crc.nd.edu',
-#            # 'cmsxrootd.fnal.gov',
-#            # 'deepthought.crc.nd.edu'
-#        ]
-#    )
-#)

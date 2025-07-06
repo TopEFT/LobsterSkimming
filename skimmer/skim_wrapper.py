@@ -17,10 +17,15 @@ skim_cut = args.cut
 module   = args.module
 out_dir  = args.out_dir
 infiles  = args.infiles
-nevents  = args.nevents
+#nevents  = args.nevents
+nevents  = "10"
+
+print("Full list of input arguments", args)
+print("Cut argument", args.cut)
 
 indent = " "*4*2
 
+#print("HELLO")
 s = ["Current working directory:"]
 for f in os.listdir('.'):
     s.append(indent + "{}".format(f))
@@ -38,30 +43,35 @@ for inf in infiles:
     cmd_args = ['xrdcp','-f',inf,local_name]
     s = "Copy command: {}".format(" ".join(cmd_args))
     print(s)
+    raise ValueError("I want to crash!")
     subprocess.check_call(cmd_args)
 
-s = "Sleeping..."
-print(s)
-time.sleep(10)
+#raise ValueError("I want to crash!")
+#s = "Sleeping..."
+#print(s)
+#time.sleep(10)
 
 to_skim = local_files
 
 cmd_args = ['nano_postproc.py']
-cmd_args.extend(['-c','{}'.format(skim_cut)])
+cmd_args.extend(['-c','{}'.format(skim_cut.replace(">","\>").replace("<", "\<").replace(" ", ""))])
 #cmd_args.extend(['-I','CMGTools.TTHAnalysis.tools.nanoAOD.ttH_modules','lepJetBTagDeepFlav,{}'.format(module)])
 cmd_args.extend(['-I','CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3','{}'.format(module)])
 cmd_args.extend([out_dir])
 cmd_args.extend(to_skim)
+print("nanproc command:", ' '.join(cmd_args))
 if nevents:
-    cmd_args.extend(['-n','{}'.format(nevents)])
+    #cmd_args.extend(['-n','{}'.format(nevents)])
+    cmd_args.extend(['-N','{}'.format(nevents)])
 
 s = "Skim command: {}".format(" ".join(cmd_args))
 print(s)
+#raise ValueError("I want to crash!")
 subprocess.check_call(cmd_args)
 
-s = "Sleeping..."
-print(s)
-time.sleep(10)
+#s = "Sleeping..."
+#print(s)
+#time.sleep(10)
  
 s = ["Current working directory:"]
 print(s)

@@ -26,24 +26,19 @@ testing = False #True
 step = "run3skimsT3"
 #ver = "v1"
 ver = "v{}".format(startingday)
+year = "2023BPix"
 
-
-tag = "mc/NAOD_ULv12_lepMVA-run3/2022/Full"
-#cfg_name = "ND_2022_background_samples.cfg"
-cfg_name = "central_2022_background_samples.cfg"
-#tag = "mc/NAOD_ULv12_lepMVA-run3/2022EE/Full"
-#cfg_name = "ND_2022EE_background_samples.cfg"
-#tag = "mc/NAOD_ULv12_lepMVA-run3/2023/Full"
-#cfg_name = "ND_2023_background_samples.cfg"
-#tag = "mc/NAOD_ULv12_lepMVA-run3/2023BPix/Full"
-#cfg_name = "ND_2023BPix_background_samples.cfg"
+tag = f"mc/NAOD_ULv12_lepMVA-run3/{year}/Full"
+#cfg_name = f"ND_{year}_background_samples.cfg"
+cfg_name = f"central_{year}_ZG_samples.cfg"
 
 
 cfg_fpath = os.path.join(top_dir,"topeft/input_samples/cfgs",cfg_name)
 
 # Only process json files that match these regexs (empty list matches everything)
-#match = ['.*ZG_MLL.*\\.json']
-match = ['ZG_MLL-4to50_PTG-10to100\\.json']
+match = ['.*ZG_MLL.*\\.json']
+#match = ['ZG_MLL-4to50_PTG-10to100\\.json',  'ZG_MLL-50_PTG-600\\.json']
+#match = ['ZG_MLL-4to50_PTG-10to100\\.json']
 #match = ['.*ZZZ.*\\.json']
 #match = ['.*DYJetsToLL_MLL-50.*\\.json'] #, '.*ZZTo4L.*\\.json']
 #match = ['.*TWZ_Tto2Q_WtoLNu_Zto2L.*\\.json', '.*DYJetsToLL_MLL-50.*\\.json']
@@ -181,7 +176,7 @@ config = Config(
         log_level=1,
         payload=10,
 	osg_version='3.6',
-        threshold_for_failure=10,
-	threshold_for_skipping=10,
+        threshold_for_failure=1000,
+	threshold_for_skipping=1000,
     )
 )

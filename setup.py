@@ -25,7 +25,7 @@ def main():
         prj_head = "{}/topeft".format(abs_path)
         cfg_dir  = "input_samples/cfgs"
         json_dir = "input_samples/sample_jsons"
-        subprocess.check_call(["./scripts/install_configs.sh",topeft_url,prj_head,tag,cfg_dir,json_dir])
+        subprocess.check_call([f"{top_dir}/scripts/install_configs.sh",topeft_url,prj_head,tag,cfg_dir,json_dir])
         print("")
 
     if os.path.exists(cmssw_release):

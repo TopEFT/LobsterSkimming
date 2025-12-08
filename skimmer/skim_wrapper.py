@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import subprocess
 import sys
 import os
@@ -9,19 +10,26 @@ parser.add_argument('infiles', nargs='+', help='')
 parser.add_argument('--cut','-c',type=str, help='')
 parser.add_argument('--module','-m',type=str, help='')
 parser.add_argument('--out-dir','-o',type=str,default='.', help='')
+parser.add_argument('--nevents','-n',type=str,default=None, help='')
 
 args = parser.parse_args()
 skim_cut = args.cut
 module   = args.module
 out_dir  = args.out_dir
 infiles  = args.infiles
+#nevents  = args.nevents
+nevents  = "10"
+
+print("Full list of input arguments", args)
+print("Cut argument", args.cut)
 
 indent = " "*4*2
 
+#print("HELLO")
 s = ["Current working directory:"]
 for f in os.listdir('.'):
     s.append(indent + "{}".format(f))
-print "\n".join(s)
+print("\n".join(s))
 
 # This is going to be our last resort...
 local_files = []
@@ -34,41 +42,50 @@ for inf in infiles:
         continue
     cmd_args = ['xrdcp','-f',inf,local_name]
     s = "Copy command: {}".format(" ".join(cmd_args))
-    print s
+    print(s)
+    raise ValueError("I want to crash!")
     subprocess.check_call(cmd_args)
 
-s = "Sleeping..."
-print s
-time.sleep(10)
+#raise ValueError("I want to crash!")
+#s = "Sleeping..."
+#print(s)
+#time.sleep(10)
 
 to_skim = local_files
 
 cmd_args = ['nano_postproc.py']
-cmd_args.extend(['-c','{}'.format(skim_cut)])
-cmd_args.extend(['-I','CMGTools.TTHAnalysis.tools.nanoAOD.ttH_modules','lepJetBTagDeepFlav,{}'.format(module)])
+cmd_args.extend(['-c','{}'.format(skim_cut.replace(">","\>").replace("<", "\<").replace(" ", ""))])
+#cmd_args.extend(['-I','CMGTools.TTHAnalysis.tools.nanoAOD.ttH_modules','lepJetBTagDeepFlav,{}'.format(module)])
+cmd_args.extend(['-I','CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3','{}'.format(module)])
 cmd_args.extend([out_dir])
 cmd_args.extend(to_skim)
+print("nanproc command:", ' '.join(cmd_args))
+if nevents:
+    #cmd_args.extend(['-n','{}'.format(nevents)])
+    cmd_args.extend(['-N','{}'.format(nevents)])
 
 s = "Skim command: {}".format(" ".join(cmd_args))
-print s
+print(s)
+#raise ValueError("I want to crash!")
 subprocess.check_call(cmd_args)
 
-s = "Sleeping..."
-print s
-time.sleep(10)
+#s = "Sleeping..."
+#print(s)
+#time.sleep(10)
  
 s = ["Current working directory:"]
-print s
+print(s)
 for f in os.listdir('.'):
     s.append(indent + "{}".format(f))
-print "\n".join(s)
+print("\n".join(s))
 
 # Need to merge any skim outputs into a single file that lobster expects
 to_merge = [ x.rsplit("/")[-1].replace(".root","_Skim.root") for x in to_skim ]
 
-cmd_args = ['python','haddnano.py','output.root']
+#cmd_args = ['python','haddnano.py','output.root']
+cmd_args = ['haddnano.py','output.root']
 cmd_args.extend(to_merge)
 s = "Merge command: {}".format(" ".join(cmd_args))
-print s
+print(s)
 subprocess.check_call(cmd_args)
 

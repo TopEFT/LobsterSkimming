@@ -51,6 +51,7 @@ def read_cfg(fpath,match=[]):
             else:
                 if len(regex_match([l],regex_lst=match)) == 0: continue
                 sample = os.path.basename(l)
+                print("sample", sample)
                 sample = sample.replace(".json","")
 
                 full_path = pjoin(cfg['cfg_dir'],l)

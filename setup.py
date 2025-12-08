@@ -21,7 +21,7 @@ def main():
     else:
         print("Installing topeft cfg and json directories")
         topeft_url = "https://github.com/TopEFT/topeft.git"
-        tag = "master"
+        tag = "run3_test_mmerged"
         prj_head = "{}/topeft".format(abs_path)
         cfg_dir  = "input_samples/cfgs"
         json_dir = "input_samples/sample_jsons"

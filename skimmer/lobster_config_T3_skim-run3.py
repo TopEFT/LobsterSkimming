@@ -17,8 +17,7 @@ top_dir = subprocess.check_output(["git", "rev-parse", "--show-toplevel"]).decod
 print(top_dir)
 
 #sandbox_location = os.path.join(top_dir,"LobsterSkimming/CMSSW_14_0_6")
-sandbox_location = "/afs/crc.nd.edu/user/a/apiccine/LobPY3/LobsterSkimming/CMSSW_14_0_6"
-#sandbox_location = "/afs/crc.nd.edu/user/a/apiccine/Lobster-With-Conda/LobsterSkimming/CMSSW_14_0_6"
+sandbox_location = "/user/apiccine/work/LobPY3/LobsterSkimming/CMSSW_14_0_6"
 
 testing = False
 
@@ -60,7 +59,7 @@ if testing:
 
 # Different xrd src redirectors depending on where the inputs are stored
 xrd_src = "hactar01.crc.nd.edu"      # Use this for accessing samples from ND T3
-xrd_dst = "hactar01.crc.nd.edu"
+xrd_dst = "hactar01.crc.nd.edu"      # Use this for writing outputs to ND T3
 
 storage_base = StorageConfiguration(
     input=[

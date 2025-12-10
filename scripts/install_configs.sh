@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-########################################
-# Sparse checkout helper
 # Usage:
-#   git_sparse_checkout <url> <target-dir> <branch-or-tag> <path1> [path2 ...]
-########################################
+#   install_configs.sh <repo-url> <target-dir> <branch-or-tag> <path1> <path2> [more paths...]
+
 git_sparse_checkout() {
     if [[ $# -lt 4 ]]; then
         echo "Usage: git_sparse_checkout <url> <target-dir> <branch/tag> <path1> [path2 ...]" >&2
@@ -60,41 +58,24 @@ git_sparse_checkout() {
     git fetch --depth=1 origin "${tag}"
 
     echo "Checking out '${tag}'"
-    # Try to create/update a local branch tracking the remote branch
-    if git rev-parse --verify "${tag}" &>/dev/null; then
+    # Try local branch, then remote branch, then tag
+    if git show-ref --verify --quiet "refs/heads/${tag}"; then
         git checkout "${tag}"
+    elif git show-ref --verify --quiet "refs/remotes/origin/${tag}"; then
+        git checkout -b "${tag}" "origin/${tag}"
     else
-        git checkout -b "${tag}" "origin/${tag}" 2>/dev/null || git checkout "${tag}"
+        git checkout "${tag}"
     fi
 }
 
-########################################
-# Install topeft cfg and json directories
-########################################
-install_topeft_configs() {
-    local url="https://github.com/TopEFT/topeft.git"
-    local tag="run3_test_mmerged"
-    local topdir
-    topdir=$(git rev-parse --show-toplevel)
-    local dir="${topdir}/topeft"
-
-    local cfg_dir="input_samples/cfgs"
-    local json_dir="input_samples/sample_jsons"
-
-    echo "Installing topeft cfg and json directories"
-    git_sparse_checkout "${url}" "${dir}" "${tag}" "${cfg_dir}" "${json_dir}"
-}
-
-########################################
-# Main
-# If args are given, behave as a generic helper:
-#   ./script.sh <url> <dir> <branch> <path1> [path2 ...]
-# If no args, install topeft configs into current repo.
-########################################
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-    if [[ $# -gt 0 ]]; then
-        git_sparse_checkout "$@"
-    else
-        install_topeft_configs
-    fi
+if [[ "$#" -lt 5 ]]; then
+    echo "Usage: $0 <repo-url> <target-dir> <branch-or-tag> <path1> <path2> [more paths...]" >&2
+    exit 1
 fi
+
+url="$1"
+dir="$2"
+tag="$3"
+shift 3
+
+git_sparse_checkout "${url}" "${dir}" "${tag}" "$@"

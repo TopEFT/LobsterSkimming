@@ -34,5 +34,5 @@ def main():
         print("Setting up CMSSW release (NANOAODtools included)")
         subprocess.check_call(["./scripts/install_cmssw.sh",abs_path,cmssw_release,scram_arch])
 
-    print("\nDone!\nMake sure to do a cmsenv before activating and/or using lobster!")
+    print("\nDone!\nMake sure not to run cmsenv when you are in your conda/mamba lobster env!")
 main()

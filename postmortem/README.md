@@ -1,5 +1,7 @@
 # Post-mortem reweighting
 ## Setup
+
+:warning: Do this outside conda/mamba
 This is based on the [CMGTools repo](https://github.com/sscruz/cmgtools-lite/tree/2aa24e61e5500bfdb490e93902c256be5fc29768?tab=readme-ov-file#set-up-cmssw-and-the-base-git)
 
 Install CMSSW and setup the base git
@@ -33,3 +35,6 @@ Compile CMSSW
 cd $CMSSW_BASE/src
 scram b -j 8
 ```
+
+## Running
+The lobster script `skimmer/lobster_config_p3_post-mortem.py` contains on example on how to run post-mortem reweighting on our nanoAOD samples.

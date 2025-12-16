@@ -25,6 +25,7 @@ print "\n".join(s)
 
 # This is going to be our last resort...
 local_files = []
+infiles = [inf.replace('file:', 'file://') for inf in infiles]
 for inf in infiles:
     local_name = inf.rsplit("/")[-1]
     local_files.append(local_name)

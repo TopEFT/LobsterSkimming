@@ -34,7 +34,7 @@ print(f"Where is your cfg?\t {cfg_fpath}")
 
 ## Only process json files that match these regexs (empty list matches everything)
 #match = ['.*UL2018\\.json']
-match = ['.*DYJetsToLL_MLL-10to50.*\\.json']
+match = ['.*ggToZZTo2mu2nu.*\\.json']
 # match = ['.*TTto2L2Nu.*\\.json']
 # match = ['.*ND_\\.json']
 # match = ['.*Muon.*22Sep2023\\.json']

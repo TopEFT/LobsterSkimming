@@ -31,7 +31,7 @@ CFG_NAME = "ND_2022_background_samples.cfg"
 
 # Only process json files that match these regexs (empty list matches everything)
 # MATCH = [r".*ZG_MLL.*600.*\.json"]
-MATCH = [r"*\.json"]
+MATCH = [r".*ggToZZTo2mu2nu.*\.json"]
 
 SKIM_CUT = (
     " nMuon+nElectron+nTau >=2 && "
@@ -49,11 +49,17 @@ WRAPPER = "skim_wrapper.py"  # keep T3 wrapper behavior, single file
 SRC = "cmsxrootd.crc.nd.edu"            # To read ND T3 files from ND T3 via XRootD
 SRC = "/cms/cephfs/data" if PROTOCOL == "file://" else SRC  # Local CephFS access
 DST = "cmsxrootd.crc.nd.edu"            # To write to ND T3
+DST = "/cms/cephfs/data" if PROTOCOL == "file://" else DST  # Local CephFS access
 
 if SRC.startswith("/cms/cephfs/data") and PROTOCOL != "file://":
     raise ValueError("When using CephFS local path for SRC, PROTOCOL must be 'file://'")
 elif not SRC.startswith("/cms/cephfs/data") and PROTOCOL != "root://":
     raise ValueError("When using remote XRootD path for SRC, PROTOCOL must be 'root://'")
+
+if DST.startswith("/cms/cephfs/data") and PROTOCOL != "file://":
+    raise ValueError("When using CephFS local path for DST, PROTOCOL must be 'file://'")
+elif not DST.startswith("/cms/cephfs/data") and PROTOCOL != "root://":
+    raise ValueError("When using remote XRootD path for DST, PROTOCOL must be 'root://'")
 
 SRC_PREFIX = PROTOCOL + SRC + "//"
 DST_PREFIX = PROTOCOL + DST + "//"
@@ -102,6 +108,7 @@ print(f"SRC    = {SRC}")
 print(f"DST    = {DST}")
 print(f"SRC_PREFIX = {SRC_PREFIX}")
 print(f"DST_PREFIX = {DST_PREFIX}")
+print(f"{DST_PREFIX}{output_path}", "\n")
 
 
 # =============================================================================

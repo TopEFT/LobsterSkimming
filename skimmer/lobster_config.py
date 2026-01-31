@@ -13,19 +13,25 @@ from tools.utils import read_cfg
 # =============================================================================
 # USER KNOBS (edit here)
 # =============================================================================
-TESTING = True
+TESTING = False
 
 # Choose one:
 #   "dbs"   -> cmssw.Dataset(dataset=..., file_based=True) + advanced.xrootd_servers
 #   "files" -> Dataset(files=...) + StorageConfiguration(input=[root://...//])
-INPUT_MODE = "dbs"
+INPUT_MODE = "files"
+
+# Choose one protocol:
+#   "root://"  # used for remote XRootD paths
+#   "file://"  # used for local CephFS paths
+PROTOCOL = "file://"  # used for local ND T3 paths only
 
 STEP = "skims"
 TAG = "data/NAOD_ULv12_lepMVA-run3/2022/Full"  # not used in TESTING mode
 CFG_NAME = "ND_2022_background_samples.cfg"
 
 # Only process json files that match these regexs (empty list matches everything)
-MATCH = [r".*ZG_MLL.*600.*\.json"]
+# MATCH = [r".*ZG_MLL.*600.*\.json"]
+MATCH = [r"*\.json"]
 
 SKIM_CUT = (
     " nMuon+nElectron+nTau >=2 && "
@@ -37,12 +43,23 @@ SKIM_CUT = (
 WRAPPER = "skim_wrapper.py"  # keep T3 wrapper behavior, single file
 
 # XRootD endpoints (T3 defaults)
-XRD_SRC = "cms-xrd-global.cern.ch"          # reads (DBS mode redirector, or files mode prefix)
-XRD_DST = "skynet013.crc.nd.edu:1094"       # writes
+## Different xrd src redirectors depending on where the inputs are stored
+# SRC = "cmsxcache.crc.nd.edu"          # To read ND T3 files from outside of ND T3 (like the opportunistic resources)
+# SRC = "cms-xrd-global.cern.ch"          # To read remote files (global redirector)
+SRC = "cmsxrootd.crc.nd.edu"            # To read ND T3 files from ND T3 via XRootD
+SRC = "/cms/cephfs/data" if PROTOCOL == "file://" else SRC  # Local CephFS access
+DST = "cmsxrootd.crc.nd.edu"            # To write to ND T3
+
+if SRC.startswith("/cms/cephfs/data") and PROTOCOL != "file://":
+    raise ValueError("When using CephFS local path for SRC, PROTOCOL must be 'file://'")
+elif not SRC.startswith("/cms/cephfs/data") and PROTOCOL != "root://":
+    raise ValueError("When using remote XRootD path for SRC, PROTOCOL must be 'root://'")
+
+SRC_PREFIX = PROTOCOL + SRC + "//"
+DST_PREFIX = PROTOCOL + DST + "//"
 
 # Workdir base (your choice)
 WORKDIR_BASE = "/tmpscratch/users/$USER"
-
 
 # =============================================================================
 # VALIDATION
@@ -81,8 +98,10 @@ if TESTING:
     output_path  = f"/store/user/$USER/{STEP}/test/lobster_skimtest_{TSTAMP1}"
 
 print(f"INPUT_MODE = {INPUT_MODE}")
-print(f"XRD_SRC    = {XRD_SRC}")
-print(f"XRD_DST    = {XRD_DST}")
+print(f"SRC    = {SRC}")
+print(f"DST    = {DST}")
+print(f"SRC_PREFIX = {SRC_PREFIX}")
+print(f"DST_PREFIX = {DST_PREFIX}")
 
 
 # =============================================================================
@@ -90,19 +109,17 @@ print(f"XRD_DST    = {XRD_DST}")
 # =============================================================================
 storage_dbs = StorageConfiguration(
     output=[
-        f"file:///cms/cephfs/data/{output_path}",
-        f"root://{XRD_DST}/{output_path}",
+        f"{DST_PREFIX}{output_path}",
     ],
     disable_input_streaming=False,
 )
 
 storage_files = StorageConfiguration(
     input=[
-        f"root://{XRD_SRC}//",  # note the double slash after host
+        f"{SRC_PREFIX}",
     ],
     output=[
-        f"file:///cms/cephfs/data/{output_path}",
-        f"root://{XRD_DST}/{output_path}",
+        f"{DST_PREFIX}{output_path}",
     ],
     disable_input_streaming=False,
 )
@@ -193,7 +210,7 @@ adv_kwargs = dict(
 )
 
 if INPUT_MODE == "dbs":
-    adv_kwargs["xrootd_servers"] = [XRD_SRC]
+    adv_kwargs["xrootd_servers"] = [SRC]
 
 config = Config(
     label=master_label,

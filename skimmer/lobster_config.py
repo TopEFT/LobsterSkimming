@@ -26,7 +26,7 @@ INPUT_MODE = "files"
 PROTOCOL_LOCAL  = "file://"
 PROTOCOL_REMOTE = "root://"
 
-YEAR = "2023BPix"
+YEAR = "2022"
 STEP = "skims"
 TAG = f"data/NAOD_ULv12_lepMVA-run3/{YEAR}"  # not used in TESTING mode
 CFG_NAME = f"ND_{YEAR}_background_samples.cfg"

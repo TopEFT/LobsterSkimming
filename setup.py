@@ -16,23 +16,23 @@ def main():
     scram_arch = "slc7_amd64_gcc700"
 
 
-    if os.path.exists("topcoffea"):
-        print "topcoffea directory already installed, skipping this part\n"
+    if os.path.exists("topeft"):
+        print("topeft directory already installed, skipping this part\n")
     else:
-        print "Installing topcoffea cfg and json directories"
-        topcoffea_url = "https://github.com/TopEFT/topcoffea.git"
+        print("Installing topeft cfg and json directories")
+        topeft_url = "https://github.com/TopEFT/topeft.git"
         tag = "master"
-        prj_head = "{}/topcoffea".format(abs_path)
-        cfg_dir  = "topcoffea/cfg"
-        json_dir = "topcoffea/json"
-        subprocess.check_call(["./scripts/install_configs.sh",topcoffea_url,prj_head,tag,cfg_dir,json_dir])
-        print ""
+        prj_head = "{}/topeft".format(abs_path)
+        cfg_dir  = "topeft/cfg"
+        json_dir = "topeft/json"
+        subprocess.check_call(["./scripts/install_configs.sh",topeft_url,prj_head,tag,cfg_dir,json_dir])
+        print("")
 
     if os.path.exists(cmssw_release):
-        print "CMSSW release {} detected, skipping this part".format(cmssw_release)
+        print("CMSSW release {} detected, skipping this part".format(cmssw_release))
     else:
-        print "Setting up CMSSW release and getting NanoAODTools"
+        print("Setting up CMSSW release and getting NanoAODTools")
         subprocess.check_call(["./scripts/install_cmssw.sh",abs_path,cmssw_release,scram_arch])
 
-    print "\nDone!\nMake sure to do a cmsenv before activating and/or using lobster!"
+    print("\nDone!\nMake sure to do a cmsenv before activating and/or using lobster!")
 main()

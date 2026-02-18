@@ -66,11 +66,11 @@ function git_sparse_checkout {
 
 # Installs the topcoffea "cfg" and "json" directories
 function install_topcoffea_configs {
-    url=https://github.com/TopEFT/topcoffea.git
+    url=https://github.com/TopEFT/topeft.git
     tag=master
-    prj_head=$(git rev-parse --show-toplevel)/topcoffea
-    cfg_dir=topcoffea/cfg
-    json_dir=topcoffea/json
+    prj_head=$(git rev-parse --show-toplevel)/topeft
+    cfg_dir=topeft/cfg
+    json_dir=topeft/json
 
     git_sparse_checkout ${url} ${prj_head} ${tag} -- ${cfg_dir} ${json_dir}
 }

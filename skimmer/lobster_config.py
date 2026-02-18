@@ -3,6 +3,7 @@ import os
 import sys
 import shutil
 import subprocess
+import inspect
 
 from lobster import cmssw
 from lobster.core import AdvancedOptions, Category, Config, Dataset, ParentDataset, StorageConfiguration, Workflow
@@ -10,73 +11,85 @@ from lobster.core import AdvancedOptions, Category, Config, Dataset, ParentDatas
 sys.path.append(os.path.split(__file__)[0])
 from tools.utils import read_cfg
 
-
 TSTAMP1 = datetime.datetime.now().strftime('%Y%m%d_%H%M')
-TSTAMP2 = datetime.datetime.now().strftime('%Y_%m_%d')
+startingday = datetime.datetime.now().strftime('%y%m%d')
 
-top_dir = subprocess.check_output(["git","rev-parse","--show-toplevel"])
-top_dir = top_dir.strip()
+top_dir = subprocess.check_output(["git", "rev-parse", "--show-toplevel"]).decode("utf-8").strip()
 
 sandbox_location = os.path.join(top_dir,"CMSSW_10_6_19_patch2")
 
-testing = True
+print(f"Sandbox location: {sandbox_location}")
 
-step = "skims"
-tag = "data/NAOD_ULv9_new-lepMVA/UL2018/Full"               # Not used if in "testing" mode
-ver = "v1"
+testing = False
 
-cfg_name = "data_samples.cfg"
-#cfg_name = "mc_signal_samples.cfg"
-cfg_fpath = os.path.join(top_dir,"topcoffea/topcoffea/cfg",cfg_name)
+step = "run3skimsT3"
+tag = "mc/new-lepMVA-v2/"               # Not used if in "testing" mode
+ver = "v{}".format(startingday)
 
-# Only process json files that match these regexs (empty list matches everything)
-match = ['.*UL2018\\.json']
+## Put here your cfg listing the samples to skim
+cfg_name = "mc_background_samples.cfg"
+
+cfg_fpath = os.path.join(top_dir,"topeft/input_samples/cfgs",cfg_name)
+print(f"Where is your cfg?\t {cfg_fpath}")
+
+## Only process json files that match these regexs (empty list matches everything)
+#match = ['.*UL2018\\.json']
+match = ['.*WLLJJ_WToLNu_EWK.*\\.json']
+# match = ['.*TTto2L2Nu.*\\.json']
+# match = ['.*ND_\\.json']
+# match = ['.*Muon.*22Sep2023\\.json']
 # match = ['DoubleEG_F-UL2016\\.json']
 # match = ['MuonEG_B-UL2017\\.json']
 
-skim_cut = "'nMuon+nElectron >=2 && Sum$( Muon_looseId && Muon_miniPFRelIso_all < 0.4 && Muon_sip3d <8) + Sum$(Electron_miniPFRelIso_all < 0.4 && Electron_sip3d <8 && Electron_mvaFall17V2noIso_WPL) >=2'"
+deep_tau_branch = "Tau_idDeepTau2018v2p5"
+deep_tau_branch = "Tau_idDeepTau2017v2p1"
 
-master_label = 'EFT_{step}_{tstamp}'.format(step=step,tstamp=TSTAMP1)
-workdir_path = "{path}/{step}/{tag}/{ver}".format(step=step,tag=tag,ver=ver,path="/tmpscratch/users/$USER")
+skim_cut = f" nMuon+nElectron+nTau >=2 && Sum$( Muon_looseId && Muon_miniPFRelIso_all<0.4 && Muon_sip3d<8 ) + Sum$( Electron_miniPFRelIso_all<0.4 && Electron_sip3d<8 ) + Sum$({deep_tau_branch}VSe>1 && {deep_tau_branch}VSmu>0 && {deep_tau_branch}VSjet>1 ) >=2 "
+
+master_label = '{step}_lobPY3_{tstamp}'.format(step=step,tstamp=TSTAMP1)
+workdir_path = "{path}/{step}/{tag}/{ver}".format(step=step,tag=tag,ver=ver,path="/scratch365/$USER")
 plotdir_path = "{path}/{step}/{tag}/{ver}".format(step=step,tag=tag,ver=ver,path="~/www/lobster")
 output_path  = "{path}/{step}/{tag}/{ver}".format(step=step,tag=tag,ver=ver,path="/store/user/$USER")
 
 if testing:
-    workdir_path = "{path}/{step}/test/lobster_test_{tstamp}".format(step=step,tstamp=TSTAMP1,path="/tmpscratch/users/$USER")
-    plotdir_path = "{path}/{step}/test/lobster_test_{tstamp}".format(step=step,tstamp=TSTAMP1,path="~/www/lobster")
-    output_path  = "{path}/{step}/test/lobster_test_{tstamp}".format(step=step,tstamp=TSTAMP1,path="/store/user/$USER")
+    master_label = '{step}_testlobPY3_{tstamp}'.format(step=step,tstamp=TSTAMP1)
+    workdir_path = "{path}/{step}/test/lobster_skimtest_{tstamp}".format(step=step,tstamp=TSTAMP1,path="/scratch365/$USER")
+    plotdir_path = "{path}/{step}/test/lobster_skimtest_{tstamp}".format(step=step,tstamp=TSTAMP1,path="~/www/lobster")
+    output_path  = "{path}/{step}/test/lobster_skimtest_{tstamp}".format(step=step,tstamp=TSTAMP1,path="/store/user/$USER")
 
-# Different xrd src redirectors depending on where the inputs are stored
-xrd_src = "ndcms.crc.nd.edu"            # Use this for accessing samples from the GRID
-#xrd_src = "cmsxrootd.fnal.gov"          # Only use this if the ND XCache is giving troubles
-#xrd_src = "deepthought.crc.nd.edu"      # Use this for accessing samples from ND T3
-
-xrd_dst = "deepthought.crc.nd.edu"
+## Different xrd src redirectors depending on where the inputs are stored
+# xrd_src = "cmsxcache.crc.nd.edu"          # To read ND T3 files from outside of ND T3 (like the opportunistic resources)
+# xrd_src = "cmsxrootd.crc.nd.edu"          # To read ND T3 files from ND T3
+# xrd_dst = "cmsxrootd.crc.nd.edu"          # To write to ND T3
+xrd_src = "skynet013.crc.nd.edu:1094"      # Use this for accessing samples from ND T3
+xrd_dst = "skynet013.crc.nd.edu:1094"
 
 storage_base = StorageConfiguration(
     input=[
-        "root://{host}//store/".format(host=xrd_src)  # Note the extra slash after the hostname
+        "file:///cms/cephfs/data/",
+        # "root://{host}//".format(host=xrd_src)  # Note the extra slash after the hostname
     ],
     output=[
-        "hdfs://eddie.crc.nd.edu:19000{path}".format(path=output_path),
-        "root://{host}/{path}".format(host=xrd_dst,path=output_path),    # Note the extra slash after the hostname
+        f"file:///cms/cephfs/data/{output_path}",
+        # f"root://{xrd_dst}/{output_path}",
     ],
-    disable_input_streaming=True,
+    # disable_input_streaming=True,
 )
+storage = storage_base
 
+## If you want to read inputs from other sites by leveraging DBS, use this instead of storage_base
+# storage_cmssw = StorageConfiguration(
+#     output=[
+#         f"file:///cms/cephfs/data/{output_path}",
+#         f"root://{xrd_dst}/{output_path}",
+#     ],
+#     disable_input_streaming=False,
+# )
+# storage = storage_cmssw
 
-storage_cmssw = StorageConfiguration(
-    output = [
-        "hdfs://eddie.crc.nd.edu:19000{path}".format(path=output_path),
-        "root://{host}/{path}".format(host=xrd_dst,path=output_path),
-    ],
-    disable_input_streaming=True,
-)
-
-storage = storage_cmssw
-
-# See tools/utils.py for dict structure of returned object
+## See tools/utils.py for dict structure of returned object
 cfg = read_cfg(cfg_fpath,match=match)
+skim_cut = skim_cut.replace(" ", "")
 
 cat = Category(
     name='processing',
@@ -88,44 +101,57 @@ cat = Category(
 wf = []
 for sample in sorted(cfg['jsons']):
     jsn = cfg['jsons'][sample]
-    print "Sample: {}".format(sample)
+    print(("Sample: {}".format(sample)))
+
     for fn in jsn['files']:
-        print "\t{}".format(fn)
+       print(("\t{}".format(fn)))
     files = [x.replace('/store/','') for x in jsn['files']]
+    files = [x for x in jsn['files']]
+
     module_name = ''
-    if 'HIPM_UL2016' in sample:
+    if 'UL16APV' in sample:
         module_name = 'lepMVA_2016_preVFP'
-    elif 'UL2017' in sample:
+    elif 'UL17' in sample:
         module_name = 'lepMVA_2017'
-    elif 'UL2018' in sample:
+    elif 'UL18' in sample:
         module_name = 'lepMVA_2018'
+    elif '2022' or '2023' in sample:
+        module_name = 'lepMVA'
     else:
         module_name = 'lepMVA_2016'
-
+        
     ds_base = Dataset(
         files=files,
-        files_per_task=1
+        files_per_task=1,
+        patterns=["*.root"],
+        #file_based=True
     )
+    ds = ds_base
 
-    ds_cmssw = cmssw.Dataset(
-        dataset=jsn['path'],
-        lumis_per_task=1,   # Since file_based is true, this will be files_per_task
-        file_based=True
-    )
-
-    ds = ds_cmssw
+    ## If you want to read inputs from other sites by leveraging DBS, use this instead of ds_base
+    # ds_cmssw = cmssw.Dataset(
+    #     dataset=jsn['path'],
+    #     lumis_per_task=1,   # Since file_based is true, this will be files_per_task
+    #     file_based=True
+    # )
+    # ds = ds_cmssw
 
     cmd = ['python','skim_wrapper.py']
     cmd.extend(['--cut',skim_cut])
     cmd.extend(['--module',module_name])
     cmd.extend(['--out-dir','.'])
     cmd.extend(['@inputfiles'])
+
+    print("\n")
+    print("Command that will be executed remotely:\n", ' '.join(cmd))
+    print("\n")
+
     skim_wf = Workflow(
         label=sample.replace('-','_'),
         sandbox=cmssw.Sandbox(release=sandbox_location),
-        dataset=ds_cmssw,
+        dataset=ds,
         category=cat,
-        extra_inputs=['skim_wrapper.py',os.path.join(sandbox_location,'src/PhysicsTools/NanoAODTools/scripts/haddnano.py')],
+        extra_inputs=['skim_wrapper.py', os.path.join(sandbox_location,'src/PhysicsTools/NanoAODTools/scripts/haddnano.py')],
         outputs=['output.root'],
         command=' '.join(cmd),
         merge_command='python haddnano.py @outputfiles @inputfiles',
@@ -142,14 +168,11 @@ config = Config(
     storage=storage,
     workflows=wf,
     advanced=AdvancedOptions(
-        dashboard=False, # Important to avoid a crash caused by out of date WMCore
-        bad_exit_codes=[127, 160],
+	bad_exit_codes=[127, 160],
         log_level=1,
         payload=10,
-        xrootd_servers=[
-            'ndcms.crc.nd.edu',
-            # 'cmsxrootd.fnal.gov',
-            # 'deepthought.crc.nd.edu'
-        ]
+	osg_version='3.6',
+        threshold_for_failure=1,
+	threshold_for_skipping=1,
     )
 )

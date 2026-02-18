@@ -23,15 +23,17 @@ INPUT_MODE = "files"
 # Choose one protocol:
 #   "root://"  # used for remote XRootD paths
 #   "file://"  # used for local CephFS paths
-PROTOCOL = "file://"  # used for local ND T3 paths only
+PROTOCOL_LOCAL  = "file://"
+PROTOCOL_REMOTE = "root://"
 
+YEAR = "2023BPix"
 STEP = "skims"
-TAG = "data/NAOD_ULv12_lepMVA-run3/2022/Full"  # not used in TESTING mode
-CFG_NAME = "ND_2022_background_samples.cfg"
+TAG = f"data/NAOD_ULv12_lepMVA-run3/{YEAR}"  # not used in TESTING mode
+CFG_NAME = f"ND_{YEAR}_background_samples.cfg"
 
 # Only process json files that match these regexs (empty list matches everything)
-# MATCH = [r".*ZG_MLL.*600.*\.json"]
-MATCH = [r".*ggToZZTo2mu2nu.*\.json"]
+# MATCH = [r".*TTLL\_MLL-50.*\.json"]
+MATCH = []
 
 SKIM_CUT = (
     " nMuon+nElectron+nTau >=2 && "
@@ -46,23 +48,26 @@ WRAPPER = "skim_wrapper.py"  # keep T3 wrapper behavior, single file
 ## Different xrd src redirectors depending on where the inputs are stored
 # SRC = "cmsxcache.crc.nd.edu"          # To read ND T3 files from outside of ND T3 (like the opportunistic resources)
 # SRC = "cms-xrd-global.cern.ch"          # To read remote files (global redirector)
-SRC = "cmsxrootd.crc.nd.edu"            # To read ND T3 files from ND T3 via XRootD
-SRC = "/cms/cephfs/data" if PROTOCOL == "file://" else SRC  # Local CephFS access
-DST = "cmsxrootd.crc.nd.edu"            # To write to ND T3
-DST = "/cms/cephfs/data" if PROTOCOL == "file://" else DST  # Local CephFS access
+SRC_REMOTE = "cmsxrootd.crc.nd.edu"            # To read ND T3 files from ND T3 via XRootD
+SRC_LOCAL = "/cms/cephfs/data" # if PROTOCOL == "file://" else SRC  # Local CephFS access
+DST_REMOTE = "cmsxrootd.crc.nd.edu"            # To write to ND T3
+DST_LOCAL = "/cms/cephfs/data" # if PROTOCOL == "file://" else DST  # Local CephFS access
 
-if SRC.startswith("/cms/cephfs/data") and PROTOCOL != "file://":
-    raise ValueError("When using CephFS local path for SRC, PROTOCOL must be 'file://'")
-elif not SRC.startswith("/cms/cephfs/data") and PROTOCOL != "root://":
-    raise ValueError("When using remote XRootD path for SRC, PROTOCOL must be 'root://'")
+# if SRC.startswith("/cms/cephfs/data") and PROTOCOL != "file://":
+#     raise ValueError("When using CephFS local path for SRC, PROTOCOL must be 'file://'")
+# elif not SRC.startswith("/cms/cephfs/data") and PROTOCOL != "root://":
+#     raise ValueError("When using remote XRootD path for SRC, PROTOCOL must be 'root://'")
 
-if DST.startswith("/cms/cephfs/data") and PROTOCOL != "file://":
-    raise ValueError("When using CephFS local path for DST, PROTOCOL must be 'file://'")
-elif not DST.startswith("/cms/cephfs/data") and PROTOCOL != "root://":
-    raise ValueError("When using remote XRootD path for DST, PROTOCOL must be 'root://'")
+# if DST.startswith("/cms/cephfs/data") and PROTOCOL != "file://":
+#     raise ValueError("When using CephFS local path for DST, PROTOCOL must be 'file://'")
+# elif not DST.startswith("/cms/cephfs/data") and PROTOCOL != "root://":
+#     raise ValueError("When using remote XRootD path for DST, PROTOCOL must be 'root://'")
 
-SRC_PREFIX = PROTOCOL + SRC + "//"
-DST_PREFIX = PROTOCOL + DST + "//"
+SRC_PREFIX_LOCAL = PROTOCOL_LOCAL + SRC_LOCAL + "//"
+DST_PREFIX_LOCAL = PROTOCOL_LOCAL + DST_LOCAL + "//"
+
+SRC_PREFIX_REMOTE = PROTOCOL_REMOTE + SRC_REMOTE + "//"
+DST_PREFIX_REMOTE = PROTOCOL_REMOTE + DST_REMOTE + "//"
 
 # Workdir base (your choice)
 WORKDIR_BASE = "/tmpscratch/users/$USER"
@@ -104,11 +109,12 @@ if TESTING:
     output_path  = f"/store/user/$USER/{STEP}/test/lobster_skimtest_{TSTAMP1}"
 
 print(f"INPUT_MODE = {INPUT_MODE}")
-print(f"SRC    = {SRC}")
-print(f"DST    = {DST}")
-print(f"SRC_PREFIX = {SRC_PREFIX}")
-print(f"DST_PREFIX = {DST_PREFIX}")
-print(f"{DST_PREFIX}{output_path}", "\n")
+print(f"SRC_PREFIX_LOCAL = {SRC_PREFIX_LOCAL}")
+print(f"SRC_PREFIX_REMOTE = {SRC_PREFIX_REMOTE}")
+print(f"DST_PREFIX_LOCAL = {DST_PREFIX_LOCAL}")
+print(f"DST_PREFIX_REMOTE = {DST_PREFIX_REMOTE}")
+print(f"{DST_PREFIX_LOCAL}{output_path}", "\n")
+print(f"{DST_PREFIX_REMOTE}{output_path}", "\n")
 
 
 # =============================================================================
@@ -116,17 +122,19 @@ print(f"{DST_PREFIX}{output_path}", "\n")
 # =============================================================================
 storage_dbs = StorageConfiguration(
     output=[
-        f"{DST_PREFIX}{output_path}",
+        f"{DST_PREFIX_REMOTE}{output_path}",
     ],
     disable_input_streaming=False,
 )
 
 storage_files = StorageConfiguration(
     input=[
-        f"{SRC_PREFIX}",
+        f"{SRC_PREFIX_LOCAL}",
+        f"{SRC_PREFIX_REMOTE}"
     ],
     output=[
-        f"{DST_PREFIX}{output_path}",
+        f"{DST_PREFIX_LOCAL}{output_path}",
+        f"{DST_PREFIX_REMOTE}{output_path}",
     ],
     disable_input_streaming=False,
 )
@@ -217,7 +225,7 @@ adv_kwargs = dict(
 )
 
 if INPUT_MODE == "dbs":
-    adv_kwargs["xrootd_servers"] = [SRC]
+    adv_kwargs["xrootd_servers"] = [SRC_REMOTE]
 
 config = Config(
     label=master_label,

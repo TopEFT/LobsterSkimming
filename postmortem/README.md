@@ -1,42 +1,25 @@
-# Post-mortem reweighting
-## Setup
-:warning: Do this outside conda/mamba
+# Post-mortem EFT reweighting
 
-This is based on the [CMGTools repo](https://github.com/sscruz/cmgtools-lite/tree/2aa24e61e5500bfdb490e93902c256be5fc29768?tab=readme-ov-file#set-up-cmssw-and-the-base-git)
+## Scope and status
 
-Install CMSSW and setup the base git
-```
-cmsrel CMSSW_10_6_26
-cd CMSSW_10_6_26/src
-cmsenv
-git cms-init
-```
+This material is Run 2-specific. It has not been validated for Run 3. Start with the [main Run 2 LobSkim tutorial](../docs/run2_lobskim_tutorial.md) for repository, environment, campaign, and nested-`topeft` policy.
 
-Get the central Heppy 80X branch (might not be needed, should check)
-```
-git remote add cmg-central https://github.com/CERN-PH-CMG/cmg-cmssw.git -f  -t heppy_80X
-cp /afs/cern.ch/user/c/cmgtools/public/sparse-checkout_80X_heppy .git/info/sparse-checkout
-git checkout -b heppy_80X cmg-central/heppy_80X
-```
+`globalEFTreWeighting.py` is a local post-mortem payload derived from CMGTools-era functionality. Its exact upstream provenance and local delta are not yet fully documented, and this documentation update did not execute or validate it. Review the script and establish provenance before production use.
 
-Get the CMGTools subsystem
-```
-git clone -o cmg-central https://github.com/CERN-PH-CMG/cmgtools-lite.git -b 80X CMGTools
-cd CMGTools
-```
+## Historical setup outline
 
-Copy our custom script to CMGTools (assuming CMSSW was installed in the same dir as your lobster skimming script)
-```
-cp ../../postmortem/globalEFTreWeighting.py CMGTools/TTHAnalysis/python/tools/nanoAOD/
-```
+The existing notes use a separate `CMSSW_10_6_26` area and CMGTools 80X content. Perform CMSSW setup outside conda/mamba, then activate the intended runtime environment only after the CMSSW area has been prepared. The historical sequence involves `cmsrel`, `cmsenv`, `git cms-init`, the `heppy_80X` CMSSW branch, a CMGTools 80X checkout, copying `globalEFTreWeighting.py` into CMGTools, and a SCRAM build.
 
-Compile CMSSW
-```
-cd $CMSSW_BASE/src
-scram b -j 8
-```
+These are historical requirements, not commands validated by this repository documentation. They also differ from the main skimming sandbox (`CMSSW_10_6_19_patch2`). Confirm release compatibility, upstream commits, local changes, and output validation before running.
 
 ## Running
-:warning: Do this inside conda/mamba
 
-The lobster script `skimmer/lobster_config_p3_post-mortem.py` contains on example on how to run post-mortem reweighting on our nanoAOD samples.
+The previously referenced `skimmer/lobster_config_p3_post-mortem.py` example is not present in the current repository and therefore is not maintained guidance. A future post-mortem round should provide a tracked, reviewed example configuration and record:
+
+- the exact source commit and local delta for `globalEFTreWeighting.py`;
+- the supported CMSSW and CMGTools commits;
+- the input and output data contracts;
+- a bounded validation result;
+- user-approved Work Queue and Lobster commands.
+
+Until that work is complete, do not infer production readiness from this README.

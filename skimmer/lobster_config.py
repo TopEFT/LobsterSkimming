@@ -21,6 +21,7 @@ TESTING = False
 # Choose one:
 #   "dbs"   -> cmssw.Dataset(dataset=..., file_based=True) + advanced.xrootd_servers
 #   "files" -> Dataset(files=...) + StorageConfiguration(input=[root://...//])
+#   "auto"  -> per-sample DBS when path is a DBS dataset, otherwise usable files
 INPUT_MODE = "files"
 
 # Choose one protocol:
@@ -33,8 +34,6 @@ TARGET = "CR"  # impacts the inclusion of the two-lepton veto in the skim cut
 YEAR = "2023BPix"
 STEP = "skimmed"
 TYPE = "background"
-TAG = f"{TYPE}/NAOD_ULv9_lepMVA-run3/{YEAR}"
-CFG_NAME = f"ND_{YEAR}_{TYPE}_samples.cfg" if TYPE != "data" else f"ND_{YEAR}_data.cfg"
 
 # Empty list matches everything.
 # For first retry, strongly consider something like:
@@ -56,6 +55,26 @@ WORKDIR_BASE = "/tmpscratch/users/$USER"
 # =============================================================================
 # HELPERS
 # =============================================================================
+
+INPUT_MODES = ("dbs", "files", "auto")
+RUN3_TYPES = ("background", "signal", "data")
+RUN3_YEARS = ("2022", "2022EE", "2023", "2023BPix")
+SUPPORTED_LEPMVA_MODULES = ("lepMVA",)
+UNSUPPORTED_LEPMVA_FALLBACKS = (
+    "lepMVA_2016_preVFP",
+    "lepMVA_2016",
+    "lepMVA_2017",
+    "lepMVA_2018",
+)
+DBS_DATA_TIERS = {
+    "NANOAOD",
+    "NANOAODSIM",
+    "MINIAOD",
+    "MINIAODSIM",
+    "AOD",
+    "AODSIM",
+    "USER",
+}
 
 def remove_whitespace(expr):
     return re.sub(r"\s+", "", expr)
@@ -87,6 +106,151 @@ def assert_no_literal_outer_quotes(expr, label):
             f"{label} starts and ends with literal quote characters. "
             f"Do not include shell quotes in the Lobster argument value: {expr!r}"
         )
+
+
+def validate_run3_type(type_value, allowed_types=RUN3_TYPES):
+    if not isinstance(type_value, str):
+        raise ValueError(
+            f"Invalid TYPE={type_value!r}; expected a string defined in the USER KNOBS "
+            "block of skimmer/lobster_config.py"
+        )
+
+    normalized_type = type_value.strip().lower()
+    if normalized_type not in allowed_types:
+        raise ValueError(
+            f"Invalid TYPE={type_value!r}; allowed values are {list(allowed_types)}. "
+            "Set TYPE in the USER KNOBS block of skimmer/lobster_config.py."
+        )
+    return normalized_type
+
+
+def validate_run3_year(
+    year_value,
+    allowed_years=RUN3_YEARS,
+    cfg_dir="topeft/input_samples/cfgs",
+):
+    if not isinstance(year_value, str):
+        raise ValueError(
+            f"Invalid YEAR={year_value!r}; allowed values are {list(allowed_years)}. "
+            f"Cfg directory inspected: {cfg_dir}."
+        )
+
+    normalized_by_lower = {year.lower(): year for year in allowed_years}
+    normalized_year = normalized_by_lower.get(year_value.strip().lower())
+    if normalized_year is None:
+        raise ValueError(
+            f"Invalid YEAR={year_value!r}; allowed values are {list(allowed_years)}. "
+            f"Cfg directory inspected: {cfg_dir}. To add a new year safely, add the "
+            "canonical background, signal, and data cfg files, then extend RUN3_YEARS "
+            "and validate their sample metadata."
+        )
+    return normalized_year
+
+
+def cfg_name_rule(campaign_type, year):
+    if campaign_type == "data":
+        return f"{year}_data.cfg"
+    return f"ND_{year}_{campaign_type}_samples.cfg"
+
+
+def resolve_cfg_name(campaign_type, year, available_cfg_names, preview_limit=20):
+    normalized_type = validate_run3_type(campaign_type)
+    normalized_year = validate_run3_year(year)
+    expected_name = cfg_name_rule(normalized_type, normalized_year)
+    available_names = sorted(str(name) for name in available_cfg_names)
+
+    if expected_name not in set(available_names):
+        preview = available_names[:preview_limit]
+        truncated = max(len(available_names) - len(preview), 0)
+        raise FileNotFoundError(
+            f"No cfg exists for TYPE={normalized_type!r}, YEAR={normalized_year!r}; "
+            f"expected {expected_name!r}. Available cfg preview={preview!r}; "
+            f"truncated={truncated}."
+        )
+    return expected_name
+
+
+def is_dbs_dataset_path(value):
+    if not isinstance(value, str):
+        return False
+
+    value = value.strip()
+    if not value.startswith("/"):
+        return False
+    if value.startswith("/store/") or value == "/store":
+        return False
+    if value.startswith("root://") or value.startswith("file://"):
+        return False
+
+    parts = [part for part in value.split("/") if part]
+    return len(parts) == 3 and parts[-1] in DBS_DATA_TIERS
+
+
+def has_usable_files(jsn):
+    files = jsn.get("files")
+    return (
+        isinstance(files, list)
+        and len(files) > 0
+        and all(isinstance(file_name, str) and file_name.strip() for file_name in files)
+    )
+
+
+def sample_metadata_summary(jsn):
+    files = jsn.get("files")
+    files_count = len(files) if isinstance(files, list) else 0
+    return (
+        f"dbs_path={is_dbs_dataset_path(jsn.get('path'))}, "
+        f"has_path={'path' in jsn}, files_count={files_count}, "
+        f"has_usable_files={has_usable_files(jsn)}"
+    )
+
+
+def sample_input_error(sample, cfg_path, input_mode, expected, jsn):
+    available_keys = sorted(str(key) for key in jsn)
+    return ValueError(
+        f"Invalid input metadata for sample {sample!r} from cfg {cfg_path!r}: "
+        f"INPUT_MODE={input_mode!r} requires {expected}; "
+        f"available_keys={available_keys}; {sample_metadata_summary(jsn)}"
+    )
+
+
+def resolve_sample_input_mode(sample, jsn, input_mode, cfg_path="<unknown cfg>"):
+    normalized_mode = str(input_mode).strip().lower()
+    if normalized_mode not in INPUT_MODES:
+        raise ValueError(
+            f"Invalid INPUT_MODE={input_mode!r}; allowed values are {list(INPUT_MODES)}"
+        )
+
+    if normalized_mode == "files":
+        if not has_usable_files(jsn):
+            raise sample_input_error(
+                sample, cfg_path, normalized_mode, "a nonempty files list", jsn
+            )
+        return "files"
+
+    if normalized_mode == "dbs":
+        if not is_dbs_dataset_path(jsn.get("path")):
+            raise sample_input_error(
+                sample,
+                cfg_path,
+                normalized_mode,
+                "path in /PrimaryDataset/ProcessedDataset/DataTier DBS form",
+                jsn,
+            )
+        return "dbs"
+
+    # Match Run 2: a valid DBS dataset takes precedence, then usable explicit files.
+    if is_dbs_dataset_path(jsn.get("path")):
+        return "dbs"
+    if has_usable_files(jsn):
+        return "files"
+    raise sample_input_error(
+        sample,
+        cfg_path,
+        normalized_mode,
+        "a DBS-style path or a nonempty files list",
+        jsn,
+    )
 
 
 def build_skim_cut(target):
@@ -154,17 +318,33 @@ def build_skim_cut(target):
     return skim_cut
 
 
-def select_module_name(sample):
-    if "HIPM_UL2016" in sample:
-        return "lepMVA_2016_preVFP"
-    if "UL2017" in sample:
-        return "lepMVA_2017"
-    if "UL2018" in sample:
-        return "lepMVA_2018"
-    if "2022" in sample or "2023" in sample:
-        return "lepMVA"
+def validate_supported_module_name(
+    module_name,
+    sample,
+    year,
+    cfg_name,
+    supported_modules=SUPPORTED_LEPMVA_MODULES,
+):
+    if module_name not in supported_modules:
+        raise ValueError(
+            f"Unsupported lepMVA module {module_name!r} for sample {sample!r}, "
+            f"YEAR={year!r}, CFG_NAME={cfg_name!r}; supported modules from "
+            "CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3 are "
+            f"{list(supported_modules)}"
+        )
+    return module_name
 
-    return "lepMVA_2016"
+
+def select_module_name(sample, year, cfg_name):
+    if "2022" not in sample and "2023" not in sample:
+        raise ValueError(
+            f"Cannot map Run 3 sample {sample!r} to a supported lepMVA module; "
+            f"YEAR={year!r}, CFG_NAME={cfg_name!r}, "
+            f"supported_modules={list(SUPPORTED_LEPMVA_MODULES)}. "
+            "Older Run 2 fallback names are not defined by the wrapper's "
+            "CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3 import path."
+        )
+    return validate_supported_module_name("lepMVA", sample, year, cfg_name)
 
 
 def build_payload_command(wrapper, skim_cut, module_name, out_dir):
@@ -270,12 +450,18 @@ def print_resolved_config(
 # =============================================================================
 
 INPUT_MODE = INPUT_MODE.strip().lower()
-if INPUT_MODE not in ("dbs", "files"):
-    raise ValueError(f"INPUT_MODE must be 'dbs' or 'files', got: {INPUT_MODE!r}")
+if INPUT_MODE not in INPUT_MODES:
+    raise ValueError(
+        f"INPUT_MODE must be one of {list(INPUT_MODES)}, got: {INPUT_MODE!r}"
+    )
 
 TARGET = TARGET.strip().upper()
 if TARGET not in ("SR", "CR"):
     raise ValueError(f"TARGET must be 'SR' or 'CR', got: {TARGET!r}")
+
+TYPE = validate_run3_type(TYPE)
+YEAR = validate_run3_year(YEAR)
+TAG = f"{TYPE}/NAOD_ULv9_lepMVA-run3/{YEAR}"
 
 
 # =============================================================================
@@ -294,7 +480,18 @@ try:
     sandbox_location = os.path.join(top_dir, "CMSSW_14_0_6")
     print(f"Sandbox location: {sandbox_location}")
 
-    cfg_fpath = os.path.join(top_dir, "topeft", "input_samples", "cfgs", CFG_NAME)
+    cfg_dir = os.path.join(top_dir, "topeft", "input_samples", "cfgs")
+    available_cfg_names = [
+        name
+        for name in os.listdir(cfg_dir)
+        if name.endswith(".cfg") and os.path.isfile(os.path.join(cfg_dir, name))
+    ]
+    CFG_NAME = resolve_cfg_name(TYPE, YEAR, available_cfg_names)
+    cfg_name_source = "derived"
+    cfg_name_pattern_or_rule = (
+        "<YEAR>_data.cfg for data; ND_<YEAR>_<TYPE>_samples.cfg otherwise"
+    )
+    cfg_fpath = os.path.join(cfg_dir, CFG_NAME)
     print(f"Where is your cfg?\t {cfg_fpath}")
 
 except Exception as err:
@@ -348,7 +545,6 @@ storage_files = StorageConfiguration(
     disable_input_streaming=False,
 )
 
-storage = storage_dbs if INPUT_MODE == "dbs" else storage_files
 MERGE_COMMAND = "haddnano.py @outputfiles @inputfiles"
 
 
@@ -399,17 +595,31 @@ try:
     workflows = []
     payload_command_actual_values = []
     payload_command_display_values = []
+    mode_counts = {"files": 0, "dbs": 0}
+    selected_module_names = set()
 
     for sample in sorted(cfg["jsons"]):
         jsn = cfg["jsons"][sample]
 
         print(f"Processing sample: {sample}")
-        print(f"  file_count: {len(jsn['files'])}")
+        sample_input_mode = resolve_sample_input_mode(
+            sample=sample,
+            jsn=jsn,
+            input_mode=INPUT_MODE,
+            cfg_path=cfg_fpath,
+        )
+        mode_counts[sample_input_mode] += 1
+        print(
+            "Sample input mode decision: "
+            f"sample={sample} input_mode={sample_input_mode} "
+            f"metadata={sample_metadata_summary(jsn)}"
+        )
 
-        files = list(jsn["files"])
-        module_name = select_module_name(sample)
+        files = list(jsn["files"]) if sample_input_mode == "files" else []
+        module_name = select_module_name(sample, YEAR, CFG_NAME)
+        selected_module_names.add(module_name)
 
-        if INPUT_MODE == "dbs":
+        if sample_input_mode == "dbs":
             ds = cmssw.Dataset(
                 dataset=jsn["path"],
                 lumis_per_task=1,
@@ -465,6 +675,20 @@ except Exception as err:
 
 
 # =============================================================================
+# FINAL STORAGE SELECTION
+# =============================================================================
+
+if INPUT_MODE == "files":
+    storage = storage_files
+elif INPUT_MODE == "dbs":
+    storage = storage_dbs
+else:
+    # Match Run 2 mixed-auto behavior: file-capable Config storage if any
+    # workflow uses explicit files, while DBS workflows still enable XRootD.
+    storage = storage_files if mode_counts["files"] else storage_dbs
+
+
+# =============================================================================
 # ADVANCED OPTIONS
 # =============================================================================
 
@@ -477,10 +701,10 @@ adv_kwargs = dict(
     threshold_for_skipping=10,
 )
 
-if INPUT_MODE == "dbs":
+if mode_counts["dbs"]:
     adv_kwargs["xrootd_servers"] = [SRC_REMOTE]
 
-selected_input_mode_counts = {INPUT_MODE: len(workflows)}
+selected_input_mode_counts = dict(sorted(mode_counts.items()))
 selected_storage_profile = "dbs" if storage is storage_dbs else "files"
 selected_storage_mode_counts = {
     "files": 1 if storage is storage_files else 0,
@@ -494,16 +718,20 @@ print_resolved_config(
         ("repo_or_campaign_label", "Run 3 Lobster skimming"),
         ("testing", TESTING),
         ("input_mode", INPUT_MODE),
-        ("input_mode_allowed_values_current_source", "dbs, files"),
-        ("auto_mode_status", "intended_not_implemented"),
-        ("auto_mode_status_not_implemented", "intended_not_implemented"),
+        ("input_mode_allowed_values_current_source", "dbs, files, auto"),
+        ("auto_mode_status", "implemented"),
+        ("auto_mode_decision_summary", "DBS path precedence, then usable files" if INPUT_MODE == "auto" else "not_used"),
         ("target", TARGET),
         ("type_or_campaign_type", TYPE),
         ("type", TYPE),
+        ("type_validation_status", "validated"),
         ("year", YEAR),
         ("run_period", YEAR),
+        ("year_validation_status", "validated"),
         ("cfg_name", CFG_NAME),
         ("derived_cfg_name_from_type_year", CFG_NAME),
+        ("cfg_name_source", cfg_name_source),
+        ("cfg_name_pattern_or_rule", cfg_name_pattern_or_rule),
         ("cfg_path", cfg_fpath),
         ("tag", TAG),
         ("workdir_path", workdir_path),
@@ -519,6 +747,9 @@ print_resolved_config(
         ("selected_input_mode_counts", selected_input_mode_counts),
         ("selected_storage_mode_counts", selected_storage_mode_counts),
         ("xrootd_servers", adv_kwargs.get("xrootd_servers", "disabled")),
+        ("supported_lepmva_modules", list(SUPPORTED_LEPMVA_MODULES)),
+        ("selected_lepmva_modules", sorted(selected_module_names)),
+        ("unsupported_lepmva_fallbacks", list(UNSUPPORTED_LEPMVA_FALLBACKS)),
         ("category_name", category_name),
         ("category_cores", category_cores),
         ("category_memory", category_memory),

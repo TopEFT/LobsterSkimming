@@ -141,10 +141,11 @@ The `USER KNOBS` block is the intended campaign-editing surface. Avoid changing 
 For common goals:
 
 - To switch from background to signal samples, change `TYPE` to `"signal"` and confirm the derived cfg exists for the selected `YEAR`.
-- To run data, change `TYPE` to `"data"` and confirm the derived `ND_<YEAR>_data.cfg` exists.
+- To run data, change `TYPE` to `"data"`; the config derives and validates `<YEAR>_data.cfg`.
 - To select a different Run 3 period, change `YEAR` and review the resulting `TAG`, `CFG_NAME`, and output paths.
 - To narrow a retry or debugging subset, edit `MATCH` with regexes that match cfg lines.
 - To choose DBS discovery instead of explicit file lists, change `INPUT_MODE` to `"dbs"` and verify every selected JSON has a valid `path`.
+- To choose per-sample input discovery, change `INPUT_MODE` to `"auto"` and review the resolved DBS/files counts and mixed-storage profile.
 - To run SR-like skim cuts, change `TARGET` to `"SR"`; leave `TARGET="CR"` for the looser control-region cut.
 
 After edits, review the complete resolved configuration output produced when Lobster eventually evaluates the config in an authorized run; do not rely only on filenames.
@@ -154,15 +155,15 @@ After edits, review the complete resolved configuration output produced when Lob
 | knob | default | allowed_or_expected_values | what_it_controls | when_to_edit | risk_or_caveat | source_file |
 | --- | --- | --- | --- | --- | --- | --- |
 | `TESTING` | `False` | Boolean | Switches labels and paths to timestamped `test/lobster_skimtest_*` locations. | For a deliberately bounded test campaign. | A test-labelled path does not make submission safe or lightweight. | `skimmer/lobster_config.py` |
-| `INPUT_MODE` | `"files"` | Current source accepts `dbs` or `files` after lower-case normalization; intended design also includes `auto` after a source update. | Dataset object type and storage profile. | Use `files` for explicit JSON file lists; use `dbs` for dataset discovery from `path`; use `auto` only after it is implemented and validated. | `auto` input mode is not yet implemented in the current Run 3 source. Support is intended and should be added in a follow-up source update before relying on automatic per-sample input-mode selection. | same |
+| `INPUT_MODE` | `"files"` | `dbs`, `files`, or `auto` after lower-case normalization. | Per-sample dataset object type and campaign storage profile. | Use `files` for explicit lists, `dbs` for dataset discovery, or `auto` for metadata-based per-sample selection. | `auto` gives a valid DBS dataset path precedence over files and can produce a mixed campaign. | same |
 | `PROTOCOL_LOCAL` | `"file://"` | Storage protocol understood by Lobster; current design expects `file://`. | Local input/output prefix. | Only for an intentional storage-profile change. | `file://` requires worker-visible paths and existing destination parents. | same |
 | `PROTOCOL_REMOTE` | `"root://"` | Current design expects `root://`. | Remote XRootD prefix. | Only when changing remote transport. | Endpoint reachability was not validated. | same |
 | `TARGET` | `"CR"` | `SR`, `CR` after upper-case normalization | Changes the skim cut and path/label segment. | Choose signal-region or control-region skim semantics. | `SR` adds the opposite-sign two-lepton veto; `CR` does not. | same |
-| `YEAR` | `"2023BPix"` | Source does not validate explicitly; practical current cfg periods are `2022`, `2022EE`, `2023`, `2023BPix`. | `TAG`, `CFG_NAME`, paths, and module selection through sample names. | Choose the Run 3 run period. | Invalid values fail later when the derived cfg is absent or samples do not match expected names. | same |
+| `YEAR` | `"2023BPix"` | Validated as `2022`, `2022EE`, `2023`, or `2023BPix`, with case-insensitive normalization to the canonical spelling. | `TAG`, `CFG_NAME`, paths, and module validation. | Choose the Run 3 run period. | Adding a year requires all canonical cfgs, updated source validation, and metadata review. | same |
 | `STEP` | `"skimmed"` | Nonempty campaign label chosen by operator. | Label/path segment. | When naming a distinct processing step. | Changing it creates different paths; it does not change physics behavior. | same |
-| `TYPE` | `"background"` | Expected `background`, `signal`, or `data` because of cfg-name derivation. | `TAG` and `CFG_NAME`. | Match the campaign kind. | Source does not validate `TYPE`; unexpected values derive cfg names that may not exist. | same |
+| `TYPE` | `"background"` | Validated as `background`, `signal`, or `data` after lower-case normalization. | `TAG` and `CFG_NAME`. | Match the campaign kind. | Unsupported values fail before paths and workflows are built. | same |
 | `TAG` | `f"{TYPE}/NAOD_ULv9_lepMVA-run3/{YEAR}"` | Derived string unless deliberately edited. | Campaign/output namespace. | Rarely; usually edit `TYPE` or `YEAR`. | Manual edits can make output identity misleading. | same |
-| `CFG_NAME` | `ND_2023BPix_background_samples.cfg` for defaults | `ND_<YEAR>_<TYPE>_samples.cfg` except data uses `ND_<YEAR>_data.cfg`; must exist under `topeft/input_samples/cfgs`. | Selects the sample list. | For custom cfg selection or when source derivation is insufficient. | Source does not separately check consistency between `TYPE` and a manual cfg override. | same |
+| `CFG_NAME` | `ND_2023BPix_background_samples.cfg` for defaults | Derived as `ND_<YEAR>_<TYPE>_samples.cfg` for background/signal and `<YEAR>_data.cfg` for data, then checked against the cfg directory. | Selects the sample list. | Not an independent user knob in the current source; change `TYPE` and `YEAR`. | A missing canonical cfg fails with the expected name and a bounded available-file preview. | same |
 | `MATCH` | `[]` | List of regular-expression strings | Filters cfg JSON lines; empty selects all active lines. | For a narrow subset or retry. | Regex matches the cfg line; verify selected count and names. | same |
 | `WRAPPER` | `"skim_wrapper.py"` | Worker wrapper present in the skimmer working context. | Payload command and `extra_inputs`. | Only when intentionally replacing the worker contract. | Wrapper changes require separate validation. | same |
 | `SRC_REMOTE` | `"cms-xrd-global.cern.ch"` | XRootD host, without protocol. | Remote stage-in prefix and DBS `xrootd_servers`. | When site/storage policy changes. | Network access and fallback order must be validated. | same |
@@ -177,7 +178,7 @@ After edits, review the complete resolved configuration output produced when Lob
 
 | label_or_path | source_expression_summary | default_or_pattern | meaning | when_it_changes | risk_or_caveat |
 | --- | --- | --- | --- | --- | --- |
-| `TAG` | `<TYPE>/NAOD_ULv9_lepMVA-run3/<YEAR>` | `background/NAOD_ULv9_lepMVA-run3/2023BPix` | Campaign/output namespace. | `TYPE`, `YEAR`, or manual edit. | It is derived before sample validation; misleading values can route outputs incorrectly. |
+| `TAG` | `<TYPE>/NAOD_ULv9_lepMVA-run3/<YEAR>` | `background/NAOD_ULv9_lepMVA-run3/2023BPix` | Campaign/output namespace. | Validated `TYPE` and `YEAR`. | It is derived after type/year validation but before sample metadata is loaded. |
 | `master_label` | `<STEP>_<TARGET>_<INPUT_MODE>_lobPY3_<timestamp>` | `skimmed_CR_files_lobPY3_YYYYMMDD_HHMM` | Lobster config label. | Step, target, mode, evaluation minute; test has `testlobPY3`. | Label says `lobPY3`; actual payload command starts with `python3`. |
 | `sandbox_location` | `<git-top>/CMSSW_14_0_6` | Absolute Run 3 release path | Worker CMSSW sandbox. | Parent checkout location or source edit. | Must match a valid built release. |
 | `cfg_fpath` | `<git-top>/topeft/input_samples/cfgs/<CFG_NAME>` | Default ends in `ND_2023BPix_background_samples.cfg` | Selected cfg. | `CFG_NAME`, `TYPE`, `YEAR`, or checkout path. | Nested checkout ownership applies. |
@@ -195,7 +196,7 @@ After edits, review the complete resolved configuration output produced when Lob
 
 ```text
 TAG = f"{TYPE}/NAOD_ULv9_lepMVA-run3/{YEAR}"
-CFG_NAME = f"ND_{YEAR}_{TYPE}_samples.cfg" if TYPE != "data" else f"ND_{YEAR}_data.cfg"
+CFG_NAME = f"{YEAR}_data.cfg" if TYPE == "data" else f"ND_{YEAR}_{TYPE}_samples.cfg"
 ```
 
 With the current defaults, `TYPE="background"` and `YEAR="2023BPix"` derive:
@@ -205,9 +206,9 @@ TAG = background/NAOD_ULv9_lepMVA-run3/2023BPix
 CFG_NAME = ND_2023BPix_background_samples.cfg
 ```
 
-The source validates `INPUT_MODE` and `TARGET`, but it does not explicitly validate `TYPE`, `YEAR`, or `CFG_NAME`. Current available `ND_<year>_*` cfgs show practical Run 3 periods `2022`, `2022EE`, `2023`, and `2023BPix`, with background and signal cfgs following the derived pattern and data using `<year>_data.cfg` names in the observed checkout rather than `ND_<year>_data.cfg` for some periods. If `TYPE="data"` is intended, confirm the derived cfg actually exists before launching; if not, a separate source/config maintenance decision is needed.
+The source normalizes and validates `TYPE` and `YEAR` before deriving `TAG`. It then lists the cfg directory, derives exactly one canonical name, and requires that name to exist. Background and signal use `ND_<YEAR>_<TYPE>_samples.cfg`; data uses `<YEAR>_data.cfg`. There is no broad filename search and no independent `CFG_NAME` override in the current source. A missing cfg error reports the requested type/year, expected name, and a bounded preview of available cfgs.
 
-`select_module_name` uses sample-name string matching. Samples containing `2022` or `2023` use module `lepMVA`; older UL names map to Run 2-style modules. This Run 3 config does not filter samples by JSON `year`; the selected cfg and `MATCH` determine the active sample list.
+`select_module_name` accepts current Run 3 sample names containing `2022` or `2023` and returns the only factory exposed by the wrapper's import path: `lepMVA`. It no longer returns unsupported Run 2 fallback names. An unmappable sample fails before workflow construction with its sample name, selected year, cfg, and supported module list. This config does not filter samples by JSON `year`; the selected cfg and `MATCH` determine the active sample list.
 
 ## TARGET and skim-cut behavior
 
@@ -221,22 +222,25 @@ Only `SR` and `CR` are valid. Both require at least two selected electrons, muon
 | --- | --- | --- | --- |
 | `files` | Nonempty `files` list containing usable file strings. | Lobster `Dataset(files=..., files_per_task=1, patterns=["*.root"])` | `storage_files`, with local and remote input prefixes and local and remote output prefixes. |
 | `dbs` | `path` string suitable for `cmssw.Dataset(dataset=...)`. | `cmssw.Dataset(dataset=jsn["path"], lumis_per_task=1, file_based=True)` | `storage_dbs`, remote output only, and `AdvancedOptions.xrootd_servers=[SRC_REMOTE]`. |
+| `auto` | A DBS-form `path`, or a nonempty usable `files` list. | Chosen per sample using the same dataset constructors as explicit modes. | DBS path takes precedence; files are the fallback. Mixed campaigns use `storage_files` and enable `xrootd_servers`. |
 
-The current Run 3 source accepts only `INPUT_MODE="files"` and `INPUT_MODE="dbs"`. `auto` input mode is not yet implemented in the current Run 3 source. Support is intended and should be added in a follow-up source update before relying on automatic per-sample input-mode selection. Until then, `/store/...`, `root://...`, and `file://...` file entries are consumed only by `files` mode. DBS mode uses the JSON `path` field and relies on Lobster/CMSSW dataset handling.
+The current source accepts all three modes. A DBS path must have `/PrimaryDataset/ProcessedDataset/DataTier` form with a recognized CMS data tier; `/store/...`, `root://...`, `file://...`, and other absolute storage paths are not DBS dataset names. Explicit `files` and `dbs` validate their required metadata. In `auto`, a valid DBS path wins when both inputs are usable, matching the Run 2 policy; otherwise the config uses files. Missing or unusable metadata fails with the sample, cfg path, requested mode, available keys, and a bounded metadata summary.
 
 Each selected JSON should also carry analysis metadata such as `year`, `isData`, `xsec`, event counts, and weight sums. The current Run 3 config consumes `files` and `path` for input construction; it does not enforce or filter on JSON `year`.
+
+The resolved summary reports the implemented auto status, per-sample input-mode counts, selected Config-level storage profile/counts, cfg-name source and naming rule, type/year validation status, XRootD server behavior, and supported/selected/rejected lepMVA module names. Sample and command previews remain bounded.
 
 ## Storage and XRootD behavior
 
 `storage_dbs` has only the remote output URL and leaves input streaming enabled. `storage_files` tries local then remote input prefixes and local then remote output prefixes, also with streaming enabled.
 
-Selection is global:
+Selection is:
 
 - `INPUT_MODE="files"` uses `storage_files`.
 - `INPUT_MODE="dbs"` uses `storage_dbs`.
-- Intended `INPUT_MODE="auto"` support is a follow-up source update; do not rely on mixed per-sample selection until it is implemented and validated.
+- `INPUT_MODE="auto"` uses `storage_dbs` when every selected workflow is DBS-based; if any workflow uses explicit files, including a mixed campaign, it uses `storage_files`.
 
-For DBS mode, `AdvancedOptions.xrootd_servers` is set to `["cms-xrd-global.cern.ch"]`. For files mode, the wrapper receives explicit input file names and may stage in missing local basenames with `xrdcp -f`.
+`AdvancedOptions.xrootd_servers` is set to `["cms-xrd-global.cern.ch"]` whenever at least one selected workflow is DBS-based, including mixed auto campaigns. File-based workflows receive explicit input file names and may stage in missing local basenames with `xrdcp -f`.
 
 The framework `StorageFileURLs.md` notes that `file://` output is a local filesystem stage-out method: the worker must see the destination parent directory, and Lobster does not auto-create missing parents during task stage-out. The remote `root://` path is a fallback/output target but was not tested here.
 
@@ -267,7 +271,7 @@ Each selected sample becomes one workflow with hyphens replaced by underscores i
 | interpreter | `skimmer/lobster_config.py` | Payload starts with `python3`. | No, unless separately validating the sandbox/runtime contract. | The worker environment must resolve `python3` correctly inside the sandbox. |
 | wrapper | `skimmer/lobster_config.py`, `skimmer/skim_wrapper.py` | Default `skim_wrapper.py`; shipped as `extra_inputs`. | Normally no. | Replacement changes the worker contract. |
 | `--cut` | config helper and wrapper parser | Receives whitespace-free generated skim expression. | Change `TARGET`, not command text. | Shell quoting is intentionally not inserted into the actual Lobster command. |
-| `--module` | config helper and wrapper parser | `lepMVA` for sample names containing `2022` or `2023`; older UL names map to year-specific modules. | Normally no; fix sample naming only through authorized metadata changes. | Wrong sample naming can select the wrong module. |
+| `--module` | config helper and wrapper parser | `lepMVA` for sample names containing `2022` or `2023`; other names fail before workflow construction. | Normally no; fix sample naming only through authorized metadata changes. | The wrapper import path exposes only the validated `lepMVA` factory. |
 | `--out-dir` | config helper and wrapper parser | `.` | Normally no. | Wrapper and expected output assume task working directory. |
 | `--nevents` | wrapper parser only | Optional wrapper flag exists, but current config does not pass it. | Not through current user knobs. | Adding it requires workflow-command review. |
 | `@inputfiles` | Lobster substitution | Expanded to task inputs. | No. | Expansion semantics belong to Lobster. |
@@ -282,18 +286,18 @@ The config also creates a `shlex.join` display command for logs. That display fo
 
 The Run 3 installer places the CMGTools payload in the `CMSSW_14_0_6` sandbox by cloning the `nd_run3` branch of `anpicci/topEFT_ttHMVA_Run3` in `scripts/install_cmssw.sh`. In the current local payload, `CMSSW_14_0_6/src/CMGTools/NanoProc/python/tools/nanoAOD/lepMVA_run3.py` defines the `lepMVA_run3` class and the `lepMVA` factory. The wrapper imports that file through the Python path `CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3` when `nano_postproc.py` starts.
 
-The imported file defines `lepMVA`; it does not define the fallback names `lepMVA_2016_preVFP`, `lepMVA_2016`, `lepMVA_2017`, or `lepMVA_2018` returned by the current config for older sample names. Static inspection therefore supports the `2022`/`2023` Run 3 path, but not those fallback names through this import path.
+The imported file defines `lepMVA`; it does not define `lepMVA_2016_preVFP`, `lepMVA_2016`, `lepMVA_2017`, or `lepMVA_2018`. The config now treats those names as unsupported fallbacks and fails instead of returning them through this import path.
 
 ### How lepMVA is selected and wired into nano_postproc.py
 
 The wiring is per sample and follows this path:
 
-1. `select_module_name` in `skimmer/lobster_config.py` returns `lepMVA` when the sample name contains `2022` or `2023`; it returns older year-specific names for matching UL names and defaults to `lepMVA_2016` otherwise.
+1. `select_module_name` in `skimmer/lobster_config.py` returns `lepMVA` when the sample name contains `2022` or `2023`; any other sample name fails with the selected year, cfg, and supported module list.
 2. `build_payload_command` adds `--module <module_name>` to the exact string assigned to `Workflow(command=command_string)`.
 3. `skimmer/skim_wrapper.py` requires and parses `--module`, then constructs `nano_postproc.py -I CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3 <module>`.
 4. For current Run 3 sample names, NanoAODTools imports and runs the `lepMVA` factory from `lepMVA_run3.py`.
 
-Selection is based on the sample-name string, not JSON `year` or `INPUT_MODE`. The selected cfg and `MATCH` determine which sample names reach this logic.
+Selection is based on the sample-name string, not JSON `year` or `INPUT_MODE`. The selected cfg and `MATCH` determine which sample names reach this logic. The resolved summary records supported, selected, and intentionally rejected fallback module names.
 
 ### How to remove lepMVA from the processing chain
 
@@ -516,9 +520,7 @@ Some framework examples are historical or site-specific. This tutorial is the so
 - Fresh setup selects `run3_test_mmerged`, while the observed nested checkout is `run3_test_mmerged_anpicci`; no reconciliation is prescribed here.
 - Setup/install bodies and production services remain unvalidated.
 - Exact Work Queue factory and Lobster submission commands are now documented from user-supplied text; status, recovery, cleanup, and shutdown commands remain user-supplied placeholders.
-- Data cfg naming may need source/config review: current `CFG_NAME` derivation expects `ND_<YEAR>_data.cfg`, while observed Run 3 cfgs include names such as `2023BPix_data.cfg`.
-- `TYPE` and `YEAR` are not explicitly validated by current Run 3 source.
-- `auto` input mode is not yet implemented in the current Run 3 source. Support is intended and should be added in a follow-up source update before relying on automatic per-sample input-mode selection.
-- Mixed DBS/files behavior is not implemented in current Run 3 source.
+- Canonical cfg derivation intentionally does not select alternate `NDSkim_*`, control-region, signal-subtype, or other specialized cfg names. Those require a separate explicit source decision rather than a broad filename search.
+- Auto mode and mixed storage behavior are source-defined but have only lightweight helper/static validation here; no production campaign was run.
 - `skim_wrapper.py` requires runtime tools such as `xrdcp`, `nano_postproc.py`, `CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3`, and `haddnano.py`; none were executed here.
 - The setup script's existing-check logic does not validate checkout branch or installation completeness.

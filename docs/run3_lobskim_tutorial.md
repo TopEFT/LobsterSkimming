@@ -2,7 +2,7 @@
 
 ## Scope and assumptions
 
-This tutorial documents the current Run 3 `LobsterSkimming` parent repository at `/users/apiccine/work/LobSkim/LobsterSkimming` on branch `run3-mva-anpicci` at commit `52da962abe0de2ce9eac1d88d98e52d97d6ab5c6`.
+This tutorial documents the current Run 3 `LobsterSkimming` parent repository at `/users/apiccine/work/LobSkim/LobsterSkimming`. In this workspace, the local working branch is `run3-mva-anpicci`; the upstream branch this work is intended to land in is `run3_mva`.
 
 The statements below are based on static inspection of the current source files. The setup entry point, installer scripts, `skimmer/lobster_config.py`, `skimmer/skim_wrapper.py`, Lobster commands, Work Queue factory, CMSSW setup, network access, storage access, and production campaign were not executed during this documentation update. Treat production behavior as unvalidated until an explicitly authorized validation or production round records exact commands and results.
 
@@ -28,7 +28,7 @@ The workspace also contains separate repositories for Run 2, Lobster, WMCore, an
 
 ## Branch and checkout policy
 
-The Run 3 parent integration branch is `run3-mva-anpicci`. This tutorial describes the source at or after commit `52da962abe0de2ce9eac1d88d98e52d97d6ab5c6`.
+The Run 3 upstream branch intended to receive and host this work is `run3_mva`. The local workspace branch used for integration and local validation is `run3-mva-anpicci`; do not treat that local branch name as the long-term public branch.
 
 Fresh setup is configured to obtain `https://github.com/TopEFT/topeft.git` at branch/tag `run3_test_mmerged`. That fresh-setup policy and an existing local checkout are different facts. At the time of this documentation update, the nested Run 3 checkout was on `run3_test_mmerged_anpicci` at `06f84d838f3aed6cc18fdd1a301b1fb5fb651624` and had a pre-existing cfg modification. Do not switch it as part of normal tutorial use. Reconciling `run3_test_mmerged` and `run3_test_mmerged_anpicci` is a separate maintenance decision requiring explicit authorization and a clean plan for local changes.
 
@@ -55,7 +55,7 @@ Keep setup/build and Lobster-control concerns explicit:
 3. The worker sandbox is fixed by `sandbox_location` in `skimmer/lobster_config.py`; it is not inferred from whichever shell happens to be active.
 4. Do not mutate a shared environment to repair a campaign. Record the missing dependency and handle environment maintenance separately.
 
-The canonical interpreter used for Codex diagnostics in this workspace is `/users/apiccine/work/miniconda3/envs/LobSkim/bin/python`, through `/users/apiccine/work/LobSkim/codex-run.sh`. That diagnostic policy does not prove the worker payload interpreter or production control-shell environment.
+The canonical interpreter used for workspace diagnostics is `/users/apiccine/work/miniconda3/envs/LobSkim/bin/python`, through `/users/apiccine/work/LobSkim/codex-run.sh`. That diagnostic policy does not prove the worker payload interpreter or production control-shell environment.
 
 ## Setup overview
 
@@ -154,7 +154,7 @@ After edits, review the complete resolved configuration output produced when Lob
 | knob | default | allowed_or_expected_values | what_it_controls | when_to_edit | risk_or_caveat | source_file |
 | --- | --- | --- | --- | --- | --- | --- |
 | `TESTING` | `False` | Boolean | Switches labels and paths to timestamped `test/lobster_skimtest_*` locations. | For a deliberately bounded test campaign. | A test-labelled path does not make submission safe or lightweight. | `skimmer/lobster_config.py` |
-| `INPUT_MODE` | `"files"` | `dbs`, `files` after lower-case normalization | Dataset object type and storage profile. | Use `files` for explicit JSON file lists; use `dbs` for dataset discovery from `path`. | No `auto` mode exists in current Run 3 source. All selected samples must satisfy the chosen global mode. | same |
+| `INPUT_MODE` | `"files"` | Current source accepts `dbs` or `files` after lower-case normalization; intended design also includes `auto` after a source update. | Dataset object type and storage profile. | Use `files` for explicit JSON file lists; use `dbs` for dataset discovery from `path`; use `auto` only after it is implemented and validated. | `auto` input mode is not yet implemented in the current Run 3 source. Support is intended and should be added in a follow-up source update before relying on automatic per-sample input-mode selection. | same |
 | `PROTOCOL_LOCAL` | `"file://"` | Storage protocol understood by Lobster; current design expects `file://`. | Local input/output prefix. | Only for an intentional storage-profile change. | `file://` requires worker-visible paths and existing destination parents. | same |
 | `PROTOCOL_REMOTE` | `"root://"` | Current design expects `root://`. | Remote XRootD prefix. | Only when changing remote transport. | Endpoint reachability was not validated. | same |
 | `TARGET` | `"CR"` | `SR`, `CR` after upper-case normalization | Changes the skim cut and path/label segment. | Choose signal-region or control-region skim semantics. | `SR` adds the opposite-sign two-lepton veto; `CR` does not. | same |
@@ -222,7 +222,7 @@ Only `SR` and `CR` are valid. Both require at least two selected electrons, muon
 | `files` | Nonempty `files` list containing usable file strings. | Lobster `Dataset(files=..., files_per_task=1, patterns=["*.root"])` | `storage_files`, with local and remote input prefixes and local and remote output prefixes. |
 | `dbs` | `path` string suitable for `cmssw.Dataset(dataset=...)`. | `cmssw.Dataset(dataset=jsn["path"], lumis_per_task=1, file_based=True)` | `storage_dbs`, remote output only, and `AdvancedOptions.xrootd_servers=[SRC_REMOTE]`. |
 
-No `auto` mode exists in current Run 3 source. `/store/...`, `root://...`, and `file://...` file entries are consumed only by `files` mode. DBS mode uses the JSON `path` field and relies on Lobster/CMSSW dataset handling.
+The current Run 3 source accepts only `INPUT_MODE="files"` and `INPUT_MODE="dbs"`. `auto` input mode is not yet implemented in the current Run 3 source. Support is intended and should be added in a follow-up source update before relying on automatic per-sample input-mode selection. Until then, `/store/...`, `root://...`, and `file://...` file entries are consumed only by `files` mode. DBS mode uses the JSON `path` field and relies on Lobster/CMSSW dataset handling.
 
 Each selected JSON should also carry analysis metadata such as `year`, `isData`, `xsec`, event counts, and weight sums. The current Run 3 config consumes `files` and `path` for input construction; it does not enforce or filter on JSON `year`.
 
@@ -234,6 +234,7 @@ Selection is global:
 
 - `INPUT_MODE="files"` uses `storage_files`.
 - `INPUT_MODE="dbs"` uses `storage_dbs`.
+- Intended `INPUT_MODE="auto"` support is a follow-up source update; do not rely on mixed per-sample selection until it is implemented and validated.
 
 For DBS mode, `AdvancedOptions.xrootd_servers` is set to `["cms-xrd-global.cern.ch"]`. For files mode, the wrapper receives explicit input file names and may stage in missing local basenames with `xrdcp -f`.
 
@@ -295,7 +296,7 @@ The wrapper does not run `haddnano.py` through `python`; it calls `haddnano.py` 
 
 ## Work Queue and Lobster runbook
 
-These commands are user-supplied and source-visible documentation, not commands executed during this Codex documentation round. They still require an explicitly authorized production round before use.
+These commands are user-supplied and source-visible documentation, not commands executed during this documentation update. They still require an explicitly authorized production round before use.
 
 Run the factory and Lobster commands from the Run 3 `skimmer/` directory, where `lobster_config.py`, `factory_skim.json`, and `with_oasis_certs` are expected to be visible as working files. This records the working-directory assumption for the user-supplied `lobster process lobster_config.py` command; do not rewrite it as `lobster process skimmer/lobster_config.py` without a separate source-backed change.
 
@@ -358,7 +359,7 @@ Run the Lobster command from the same `skimmer/` directory assumption unless a f
 
 Non-goals and safety caveats:
 
-- Do not run `work_queue_factory`, `lobster process`, Condor, XRootD, DBS, setup, installer, CMSSW, or worker commands unless a separate production prompt explicitly authorizes those capabilities.
+- Do not run `work_queue_factory`, `lobster process`, Condor, XRootD, DBS, setup, installer, CMSSW, or worker commands unless a separate production authorization explicitly permits those capabilities.
 - Do not infer production readiness from these documented commands; setup, services, credentials, storage, and worker behavior remain unvalidated here.
 - Do not edit `factory_skim.json`, `with_oasis_certs`, wrapper code, setup scripts, sample cfgs, or nested `topeft` merely to match this runbook.
 - Run 3 uses `--runos al9-wq-7.11.1`; Run 2 uses `--runos cc7-wq-7.11.1`.
@@ -401,7 +402,7 @@ The framework recovery note explains that `threshold_for_failure` controls unit 
 
 ### static_preflight_checks
 
-- Confirm Run 3 parent path, `run3-mva-anpicci`, intended commit, and tracked state.
+- Confirm Run 3 parent path, local branch `run3-mva-anpicci`, upstream target branch `run3_mva`, intended commit, and tracked state.
 - Inspect nested `topeft` status separately; preserve its branch and local changes.
 - Confirm only intended documentation/config edits are present and review their diff.
 
@@ -476,7 +477,7 @@ Some framework examples are historical or site-specific. This tutorial is the so
 - Exact Work Queue factory and Lobster submission commands are now documented from user-supplied text; status, recovery, cleanup, and shutdown commands remain user-supplied placeholders.
 - Data cfg naming may need source/config review: current `CFG_NAME` derivation expects `ND_<YEAR>_data.cfg`, while observed Run 3 cfgs include names such as `2023BPix_data.cfg`.
 - `TYPE` and `YEAR` are not explicitly validated by current Run 3 source.
-- Current Run 3 source does not support Run 2-style `INPUT_MODE="auto"` behavior.
+- `auto` input mode is not yet implemented in the current Run 3 source. Support is intended and should be added in a follow-up source update before relying on automatic per-sample input-mode selection.
 - Mixed DBS/files behavior is not implemented in current Run 3 source.
 - `skim_wrapper.py` requires runtime tools such as `xrdcp`, `nano_postproc.py`, `CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3`, and `haddnano.py`; none were executed here.
 - The setup script's existing-check logic does not validate checkout branch or installation completeness.

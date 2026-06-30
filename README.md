@@ -1,6 +1,6 @@
 # Run 3 LobSkim / LobsterSkimming
 
-This repository defines the Run 3 NanoAOD skimming workflows used with the local Lobster framework. The current integration branch for this workspace is `run3-mva-anpicci`.
+This repository defines the Run 3 NanoAOD skimming workflows used with the local Lobster framework. In this workspace, the local working branch is `run3-mva-anpicci`; the upstream branch this work is intended to land in is `run3_mva`.
 
 Read [the Run 3 LobSkim tutorial](docs/run3_lobskim_tutorial.md) before changing or launching a campaign. It documents the current source-visible setup, configuration fields, sample metadata contracts, wrapper behavior, storage paths, and validation checklist.
 

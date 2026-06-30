@@ -19,13 +19,15 @@ def main():
     if os.path.exists("topeft"):
         print("topeft directory already installed, skipping this part\n")
     else:
-        print("Installing topeft cfg and json directories")
+        print("Installing topeft input sample cfg and JSON directories")
         topeft_url = "https://github.com/TopEFT/topeft.git"
         tag = "master"
         prj_head = "{}/topeft".format(abs_path)
-        cfg_dir  = "topeft/cfg"
-        json_dir = "topeft/json"
-        subprocess.check_call(["./scripts/install_configs.sh",topeft_url,prj_head,tag,cfg_dir,json_dir])
+        # Sparse paths are relative to prj_head. These install under
+        # topeft/input_samples/cfgs and topeft/input_samples/sample_jsons.
+        cfg_dir = "input_samples/cfgs"
+        sample_jsons_dir = "input_samples/sample_jsons"
+        subprocess.check_call(["./scripts/install_configs.sh",topeft_url,prj_head,tag,cfg_dir,sample_jsons_dir])
         print("")
 
     if os.path.exists(cmssw_release):

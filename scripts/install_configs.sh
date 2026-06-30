@@ -64,15 +64,16 @@ function git_sparse_checkout {
     git checkout ${tag}
 }
 
-# Installs the topcoffea "cfg" and "json" directories
-function install_topcoffea_configs {
+# Installs the topeft input sample cfg and JSON directories
+function install_topeft_configs {
     url=https://github.com/TopEFT/topeft.git
     tag=master
     prj_head=$(git rev-parse --show-toplevel)/topeft
-    cfg_dir=topeft/cfg
-    json_dir=topeft/json
+    # Sparse paths are relative to prj_head.
+    cfg_dir=input_samples/cfgs
+    sample_jsons_dir=input_samples/sample_jsons
 
-    git_sparse_checkout ${url} ${prj_head} ${tag} -- ${cfg_dir} ${json_dir}
+    git_sparse_checkout ${url} ${prj_head} ${tag} -- ${cfg_dir} ${sample_jsons_dir}
 }
 
 

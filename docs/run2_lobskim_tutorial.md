@@ -277,29 +277,79 @@ The wrapper parses one or more positional input files plus `--cut`, `--module`, 
 
 The script is Python-2-style source. It does not validate that `--cut` or `--module` was supplied before constructing the command, and output filename derivation assumes `.root` inputs. It was not executed in this documentation round.
 
-## Work Queue factory placeholder
+## Work Queue and Lobster runbook
 
-The exact Run 2 factory command has not been supplied. Use only this non-runnable placeholder until the user approves a concrete command:
+These commands are user-supplied and source-visible documentation, not commands executed during this Codex documentation round. They still require an explicitly authorized production round before use.
 
-```text
-<USER_SUPPLIED_RUN2_WORK_QUEUE_FACTORY_COMMAND>
+Run the factory and Lobster commands from the Run 2 `skimmer/` directory, where `lobster_config.py`, `factory_skim.json`, and `with_oasis_certs` are expected to be visible as working files. This records the working-directory assumption for the user-supplied `lobster process lobster_config.py` command; do not rewrite it as `lobster process skimmer/lobster_config.py` without a separate source-backed change.
+
+Preferred shell sequence:
+
+1. Start from a fresh terminal session. A fresh terminal is preferred but not mandatory if the existing shell is clean.
+2. Run the `preset_lobconda` cleanup before activating any conda/Lobster environment:
+
+   ```bash
+   unset PYTHONPATH
+   unset PERL5LIB
+   ```
+
+3. Activate the appropriate conda/Lobster environment using the site-approved command:
+
+   ```text
+   <ACTIVATE_LOBSTER_CONDA_ENVIRONMENT>
+   ```
+
+4. Move to the Run 2 skimmer directory:
+
+   ```bash
+   cd /users/apiccine/work/LobSkim/LobsterSkimmingRun2/skimmer
+   ```
+
+5. Confirm the required files exist before launching:
+
+   ```bash
+   test -f factory_skim.json
+   test -f with_oasis_certs
+   ```
+
+6. Confirm the Run 2 factory `--runos` is `cc7-wq-7.11.1`, not the Run 3 AL9 value.
+
+Run 2 Work Queue factory command:
+
+```bash
+nohup work_queue_factory -T condor -M lobster_apiccine.* -dall -o /tmp/apiccine_factoryskim.debug -C factory_skim.json -S /tmp/wq-apiccine-factoryskim --runos cc7-wq-7.11.1 --wrapper ./with_oasis_certs --wrapper-input with_oasis_certs > /tmp/apiccine_factoryskim.log &
 ```
 
-The later command must record factory host, master regex/name, project/workdir path, minimum and maximum workers, cores, memory, disk, log location, shutdown procedure, and any site-specific runtime image. `skimmer/factory_skim.json` and `skimmer/factory_skim_run2.json` currently exist only as untracked local artifacts; they may illustrate a schema but are not canonical repository documentation and their values are not endorsed here.
+Factory command details:
 
-## Lobster submission placeholder
+- The command must run from inside the activated conda/Lobster environment.
+- The command is backgrounded with `nohup` and `&`.
+- Factory stdout is redirected to `/tmp/apiccine_factoryskim.log`.
+- Factory debug output is written to `/tmp/apiccine_factoryskim.debug`.
+- The worker project/sandbox directory is `/tmp/wq-apiccine-factoryskim`.
+- The Work Queue master regex is `lobster_apiccine.*`.
+- The factory profile is `factory_skim.json`.
+- The wrapper file is `./with_oasis_certs`.
+- The wrapper is also passed as wrapper input with `--wrapper-input with_oasis_certs`.
 
-The exact command has not been supplied:
+Run 2 Lobster submission command:
 
-```text
-<USER_SUPPLIED_RUN2_LOBSTER_PROCESS_COMMAND>
+```bash
+lobster process lobster_config.py
 ```
 
-Before replacing the placeholder, specify the config/workdir argument, foreground/background expectations, control-shell environment, logs, factory association, credentials, and termination plan. The fact that framework documentation contains generic `lobster process` examples does not make those examples correct for this campaign.
+Run the Lobster command from the same `skimmer/` directory assumption unless a future source-backed runbook revision documents a different launch directory.
+
+Non-goals and safety caveats:
+
+- Do not run `work_queue_factory`, `lobster process`, Condor, XRootD, DBS, setup, installer, CMSSW, or worker commands unless a separate production prompt explicitly authorizes those capabilities.
+- Do not infer production readiness from these documented commands; setup, services, credentials, storage, and worker behavior remain unvalidated here.
+- Do not edit `factory_skim.json`, `with_oasis_certs`, wrapper code, setup scripts, sample cfgs, or nested `topeft` merely to match this runbook.
+- Run 2 uses `--runos cc7-wq-7.11.1`; Run 3 uses `--runos al9-wq-7.11.1`.
 
 ## Monitoring placeholder
 
-Use the user-approved status command:
+The exact status command remains unresolved. Use the user-approved status command only after it is supplied:
 
 ```text
 <USER_SUPPLIED_RUN2_LOBSTER_STATUS_COMMAND>
@@ -398,7 +448,7 @@ Some framework examples are historical or site-specific. This tutorial is the so
 
 - Fresh setup selects `run3_test_mmerged`, while the observed nested checkout is `run3_test_mmerged_anpicci`; no reconciliation is prescribed here.
 - Setup/install bodies and production services remain unvalidated.
-- Exact Work Queue, Lobster submission/status, recovery, and shutdown commands remain user-supplied placeholders.
+- Exact Work Queue factory and Lobster submission commands are now documented from user-supplied text; status, recovery, cleanup, and shutdown commands remain user-supplied placeholders.
 - Local factory JSON files are untracked and noncanonical.
 - Mixed DBS/files behavior is implemented but not production-validated by this documentation round.
 - `skim_wrapper.py` is Python-2-style and relies on sandbox command resolution.

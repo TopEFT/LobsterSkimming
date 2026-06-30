@@ -293,17 +293,75 @@ It then:
 
 The wrapper does not run `haddnano.py` through `python`; it calls `haddnano.py` directly. It does not validate that the expected `_Skim.root` files exist before merge. It was not executed in this documentation round.
 
-## Work Queue factory placeholder
+## Work Queue and Lobster runbook
 
-The exact Run 3 factory command is intentionally deferred to LOBALIGN006. Use only this non-runnable placeholder until the user-approved command is added:
+These commands are user-supplied and source-visible documentation, not commands executed during this Codex documentation round. They still require an explicitly authorized production round before use.
 
-```text
-<USER_SUPPLIED_RUN3_WORK_QUEUE_FACTORY_COMMAND>
+Run the factory and Lobster commands from the Run 3 `skimmer/` directory, where `lobster_config.py`, `factory_skim.json`, and `with_oasis_certs` are expected to be visible as working files. This records the working-directory assumption for the user-supplied `lobster process lobster_config.py` command; do not rewrite it as `lobster process skimmer/lobster_config.py` without a separate source-backed change.
+
+Preferred shell sequence:
+
+1. Start from a fresh terminal session. A fresh terminal is preferred but not mandatory if the existing shell is clean.
+2. Run the `preset_lobconda` cleanup before activating any conda/Lobster environment:
+
+   ```bash
+   unset PYTHONPATH
+   unset PERL5LIB
+   ```
+
+3. Activate the appropriate conda/Lobster environment using the site-approved command:
+
+   ```text
+   <ACTIVATE_LOBSTER_CONDA_ENVIRONMENT>
+   ```
+
+4. Move to the Run 3 skimmer directory:
+
+   ```bash
+   cd /users/apiccine/work/LobSkim/LobsterSkimming/skimmer
+   ```
+
+5. Confirm the required files exist before launching:
+
+   ```bash
+   test -f factory_skim.json
+   test -f with_oasis_certs
+   ```
+
+6. Confirm the Run 3 factory `--runos` is `al9-wq-7.11.1`, not the Run 2 CC7 value.
+
+Run 3 Work Queue factory command:
+
+```bash
+nohup work_queue_factory -T condor -M lobster_apiccine.* -dall -o /tmp/apiccine_factoryskim.debug -C factory_skim.json -S /tmp/wq-apiccine-factoryskim --runos al9-wq-7.11.1 --wrapper ./with_oasis_certs --wrapper-input with_oasis_certs > /tmp/apiccine_factoryskim.log &
 ```
 
-This placeholder represents the eventual `work_queue_factory` invocation. Do not replace it with a runnable command until the LOBALIGN006 runbook records the exact site-specific command and shutdown procedure.
+Factory command details:
 
-The later runbook must record factory host, master regex/name, project/workdir path, worker minimum/maximum, cores, memory, disk, `runos`, wrapper and wrapper-input settings, debug/log paths, conda/Lobster environment cleanup and activation sequence, and shutdown procedure.
+- The command must run from inside the activated conda/Lobster environment.
+- The command is backgrounded with `nohup` and `&`.
+- Factory stdout is redirected to `/tmp/apiccine_factoryskim.log`.
+- Factory debug output is written to `/tmp/apiccine_factoryskim.debug`.
+- The worker project/sandbox directory is `/tmp/wq-apiccine-factoryskim`.
+- The Work Queue master regex is `lobster_apiccine.*`.
+- The factory profile is `factory_skim.json`.
+- The wrapper file is `./with_oasis_certs`.
+- The wrapper is also passed as wrapper input with `--wrapper-input with_oasis_certs`.
+
+Run 3 Lobster submission command:
+
+```bash
+lobster process lobster_config.py
+```
+
+Run the Lobster command from the same `skimmer/` directory assumption unless a future source-backed runbook revision documents a different launch directory.
+
+Non-goals and safety caveats:
+
+- Do not run `work_queue_factory`, `lobster process`, Condor, XRootD, DBS, setup, installer, CMSSW, or worker commands unless a separate production prompt explicitly authorizes those capabilities.
+- Do not infer production readiness from these documented commands; setup, services, credentials, storage, and worker behavior remain unvalidated here.
+- Do not edit `factory_skim.json`, `with_oasis_certs`, wrapper code, setup scripts, sample cfgs, or nested `topeft` merely to match this runbook.
+- Run 3 uses `--runos al9-wq-7.11.1`; Run 2 uses `--runos cc7-wq-7.11.1`.
 
 `skimmer/factory_skim.json` is tracked in this repository and currently contains:
 
@@ -317,21 +375,9 @@ The later runbook must record factory host, master regex/name, project/workdir p
 
 Treat it as a source-controlled resource profile, not as a complete or validated factory launch command.
 
-## Lobster submission placeholder
-
-The exact Run 3 Lobster process command is intentionally deferred to LOBALIGN006:
-
-```text
-<USER_SUPPLIED_RUN3_LOBSTER_PROCESS_COMMAND>
-```
-
-This placeholder represents the eventual `lobster process` launch. Do not infer the command from framework examples or historical README snippets.
-
-Before replacing the placeholder, specify the config/workdir argument, foreground/background expectations, control-shell environment, logs, factory association, credentials, expected `lobster status` or validation commands, and termination plan. The fact that framework documentation contains generic examples does not make those examples correct for this campaign.
-
 ## Monitoring placeholder
 
-Use the user-approved status command placeholder until LOBALIGN006 records the exact command:
+The exact status command remains unresolved. Use the user-approved status command only after it is supplied:
 
 ```text
 <USER_SUPPLIED_RUN3_LOBSTER_STATUS_COMMAND>
@@ -427,7 +473,7 @@ Some framework examples are historical or site-specific. This tutorial is the so
 
 - Fresh setup selects `run3_test_mmerged`, while the observed nested checkout is `run3_test_mmerged_anpicci`; no reconciliation is prescribed here.
 - Setup/install bodies and production services remain unvalidated.
-- Exact Work Queue, Lobster submission/status, recovery, cleanup, and shutdown commands remain user-supplied placeholders for LOBALIGN006.
+- Exact Work Queue factory and Lobster submission commands are now documented from user-supplied text; status, recovery, cleanup, and shutdown commands remain user-supplied placeholders.
 - Data cfg naming may need source/config review: current `CFG_NAME` derivation expects `ND_<YEAR>_data.cfg`, while observed Run 3 cfgs include names such as `2023BPix_data.cfg`.
 - `TYPE` and `YEAR` are not explicitly validated by current Run 3 source.
 - Current Run 3 source does not support Run 2-style `INPUT_MODE="auto"` behavior.

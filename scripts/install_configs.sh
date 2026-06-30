@@ -1,80 +1,66 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Usage:
+#   install_configs.sh <repo-url> <target-dir> <branch-or-tag> <path1> <path2> [more paths...]
 
 # See: https://stackoverflow.com/questions/60190759/how-do-i-clone-fetch-or-sparse-checkout-a-single-directory-or-a-list-of-directo/60190760#60190760
 # See Also: https://github.com/frgomes/bash-scripts/blob/master/bin/git_sparse_checkout
 function git_sparse_checkout {
-    local self=$(readlink -f "${BASH_SOURCE[0]}")
-    local app=$(basename $self)
-    local usage="USAGE: ${app} repository-URL [tag] [project-directory] [--] [list-of-paths]"
-
-    # git repository, e.g.: http://github.com/frgomes/bash-scripts
-    [[ $# != 0 ]] || (echo "${usage}" 1>&2 ; return 1)
-    local arg=${1}
-    [[ "${arg}" != "--" ]] || (echo "${usage}" 1>&2 ; return 1)
-    local url="${arg}"
-    [[ $# == 0 ]] || shift
-
-    local prj=$(echo "$url" | sed 's:/:\n:g' | tail -1)
-
-    if [[ "${arg}" != "--" ]] ;then arg="${1:-.}" ;fi
-    if [[ "${arg}" == "--" || "${arg}" == "." ]] ;then
-      local dir=$(readlink -f "./${prj}")
-    else
-      local dir=$(readlink -f "${arg}")
-      [[ $# == 0 ]] || shift
+    if [[ $# -lt 4 ]]; then
+        echo "Usage: git_sparse_checkout <url> <target-dir> <branch/tag> <path1> [path2 ...]" >&2
+        return 1
     fi
 
-    # default is master for historical reasons
-    if [[ "${arg}" != "--" ]] ;then arg="${1:-master}" ;fi
-    if [[ "${arg}" == "--" ]] ;then
-      local tag=master
-    else
-      local tag="${arg}"
-      [[ $# == 0 ]] || shift
-    fi
-
-    if [[ "${arg}" == "--" ]] ;then [[ $# == 0 ]] || shift; fi
-    if [[ "${1:-}" == "--" ]] ;then [[ $# == 0 ]] || shift; fi
-
-    # Note: any remaining arguments after these above are considered as a
-    # list of files or directories to be downloaded.
-
-    local sparse=true
-    local opts='--depth=1'
+    local url="$1"
+    local dir="$2"
+    local tag="$3"
+    shift 3
+    local paths=("$@")
 
     echo "url: ${url}"
     echo "dir: ${dir}"
     echo "tag: ${tag}"
-    echo "prj: ${prj}"
-
-
     mkdir -p "${dir}"
-    cd "${dir}"
+    cd "${dir}" || { echo "Failed to cd to ${dir}" >&2; return 1; }
     git init
-    git config core.sparseCheckout ${sparse}
-    for path in $* ;do
+    git config core.sparseCheckout true
+    mkdir -p .git/info
+    : > .git/info/sparse-checkout
+    for path in "${paths[@]}"; do
         echo "Getting ${path}"
-        echo "${path}" >> ${dir}/.git/info/sparse-checkout
+        echo "${path}" >> .git/info/sparse-checkout
     done
     echo "Adding remote url"
-    git remote add origin ${url}
+    git remote add origin "${url}"
     echo "Fetching"
     git fetch origin
     echo "Checking out tag"
-    git checkout ${tag}
+    git checkout "${tag}"
 }
 
 # Installs the topeft input sample cfg and JSON directories
 function install_topeft_configs {
-    url=https://github.com/TopEFT/topeft.git
-    tag=master
-    prj_head=$(git rev-parse --show-toplevel)/topeft
+    local url=https://github.com/TopEFT/topeft.git
+    local topeft_branch=run3_test_mmerged
+    local prj_head
+    prj_head="$(git rev-parse --show-toplevel)/topeft"
     # Sparse paths are relative to prj_head.
-    cfg_dir=input_samples/cfgs
-    sample_jsons_dir=input_samples/sample_jsons
+    local cfg_dir=input_samples/cfgs
+    local sample_jsons_dir=input_samples/sample_jsons
 
-    git_sparse_checkout ${url} ${prj_head} ${tag} -- ${cfg_dir} ${sample_jsons_dir}
+    git_sparse_checkout "${url}" "${prj_head}" "${topeft_branch}" "${cfg_dir}" "${sample_jsons_dir}"
 }
 
+if [[ $# -lt 5 ]]; then
+    echo "Usage: $0 <repo-url> <target-dir> <branch-or-tag> <path1> <path2> [more paths...]" >&2
+    exit 1
+fi
 
-git_sparse_checkout $1 $2 $3 -- $4 $5
+url="$1"
+dir="$2"
+tag="$3"
+shift 3
+
+git_sparse_checkout "${url}" "${dir}" "${tag}" "$@"

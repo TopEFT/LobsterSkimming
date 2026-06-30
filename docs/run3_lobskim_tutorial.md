@@ -208,6 +208,8 @@ CFG_NAME = ND_2023BPix_background_samples.cfg
 
 The source normalizes and validates `TYPE` and `YEAR` before deriving `TAG`. It then lists the cfg directory, derives exactly one canonical name, and requires that name to exist. Background and signal use `ND_<YEAR>_<TYPE>_samples.cfg`; data uses `<YEAR>_data.cfg`. There is no broad filename search and no independent `CFG_NAME` override in the current source. A missing cfg error reports the requested type/year, expected name, and a bounded preview of available cfgs.
 
+The resolver intentionally chooses only canonical cfg names. It does not automatically discover alternate `NDSkim_*`, CR/SR-specific, central-signal, signal-subtype, synchronization, or general cfgs. Users should not expect `TYPE` and `YEAR` to discover those alternate cfg families automatically. Supporting those files requires an explicit selection design rather than a broad filename search.
+
 `select_module_name` accepts current Run 3 sample names containing `2022` or `2023` and returns the only factory exposed by the wrapper's import path: `lepMVA`. It no longer returns unsupported Run 2 fallback names. An unmappable sample fails before workflow construction with its sample name, selected year, cfg, and supported module list. This config does not filter samples by JSON `year`; the selected cfg and `MATCH` determine the active sample list.
 
 ## TARGET and skim-cut behavior
@@ -225,6 +227,8 @@ Only `SR` and `CR` are valid. Both require at least two selected electrons, muon
 | `auto` | A DBS-form `path`, or a nonempty usable `files` list. | Chosen per sample using the same dataset constructors as explicit modes. | DBS path takes precedence; files are the fallback. Mixed campaigns use `storage_files` and enable `xrootd_servers`. |
 
 The current source accepts all three modes. A DBS path must have `/PrimaryDataset/ProcessedDataset/DataTier` form with a recognized CMS data tier; `/store/...`, `root://...`, `file://...`, and other absolute storage paths are not DBS dataset names. Explicit `files` and `dbs` validate their required metadata. In `auto`, a valid DBS path wins when both inputs are usable, matching the Run 2 policy; otherwise the config uses files. Missing or unusable metadata fails with the sample, cfg path, requested mode, available keys, and a bounded metadata summary.
+
+The mixed `auto` policy is source-defined and covered by lightweight helper/static validation, but it has not been exercised in a real Lobster campaign. Before using mixed files/DBS `auto` campaigns for production, run an explicitly approved validation round that checks Lobster, Work Queue, storage, XRootD, and DBS behavior.
 
 Each selected JSON should also carry analysis metadata such as `year`, `isData`, `xsec`, event counts, and weight sums. The current Run 3 config consumes `files` and `path` for input construction; it does not enforce or filter on JSON `year`.
 
@@ -297,7 +301,7 @@ The wiring is per sample and follows this path:
 3. `skimmer/skim_wrapper.py` requires and parses `--module`, then constructs `nano_postproc.py -I CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3 <module>`.
 4. For current Run 3 sample names, NanoAODTools imports and runs the `lepMVA` factory from `lepMVA_run3.py`.
 
-Selection is based on the sample-name string, not JSON `year` or `INPUT_MODE`. The selected cfg and `MATCH` determine which sample names reach this logic. The resolved summary records supported, selected, and intentionally rejected fallback module names.
+Selection is based on the sample-name string, not JSON `year` or `INPUT_MODE`. Current sample names containing `2022` or `2023` map to `lepMVA`; other names fail early because the wrapper import path exposes only `lepMVA`. Supporting other Run 3 naming conventions requires a source-backed module-selection update. The selected cfg and `MATCH` determine which sample names reach this logic. The resolved summary records supported, selected, and intentionally rejected fallback module names.
 
 ### How to remove lepMVA from the processing chain
 
@@ -520,7 +524,8 @@ Some framework examples are historical or site-specific. This tutorial is the so
 - Fresh setup selects `run3_test_mmerged`, while the observed nested checkout is `run3_test_mmerged_anpicci`; no reconciliation is prescribed here.
 - Setup/install bodies and production services remain unvalidated.
 - Exact Work Queue factory and Lobster submission commands are now documented from user-supplied text; status, recovery, cleanup, and shutdown commands remain user-supplied placeholders.
-- Canonical cfg derivation intentionally does not select alternate `NDSkim_*`, control-region, signal-subtype, or other specialized cfg names. Those require a separate explicit source decision rather than a broad filename search.
-- Auto mode and mixed storage behavior are source-defined but have only lightweight helper/static validation here; no production campaign was run.
+- Canonical cfg derivation intentionally does not select alternate `NDSkim_*`, CR/SR-specific, central-signal, signal-subtype, synchronization, or general cfg names. Users should not expect `TYPE` and `YEAR` to discover those files automatically; support requires a separate explicit source decision and selection design rather than a broad filename search.
+- Auto mode and mixed storage behavior are source-defined and covered by lightweight helper/static validation, but no production campaign was run. Mixed files/DBS `auto` production requires a separately approved validation round covering Lobster, Work Queue, storage, XRootD, and DBS behavior.
+- Run 3 lepMVA selection is sample-name based. Current names containing `2022` or `2023` map to `lepMVA`; other names fail early because the wrapper import path exposes only `lepMVA`. Supporting other Run 3 sample-name conventions requires a source-backed module-selection update.
 - `skim_wrapper.py` requires runtime tools such as `xrdcp`, `nano_postproc.py`, `CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3`, and `haddnano.py`; none were executed here.
 - The setup script's existing-check logic does not validate checkout branch or installation completeness.

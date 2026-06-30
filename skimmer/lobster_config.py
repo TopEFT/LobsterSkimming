@@ -392,6 +392,86 @@ def build_payload_command(wrapper, skim_cut, module_name, out_dir):
     return command_string, display_command
 
 
+def sample_names_preview(sample_names, limit=30):
+    names = [str(name) for name in sample_names]
+    preview = names[:limit]
+    truncated = max(len(names) - len(preview), 0)
+    return preview, truncated
+
+
+def count_values(values):
+    counts = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def format_preview_value(values, limit=30):
+    if values is None:
+        items = []
+    elif isinstance(values, (list, tuple)):
+        items = list(values)
+    else:
+        items = [values]
+
+    preview, truncated = sample_names_preview(items, limit=limit)
+    preview_text = ", ".join(preview) if preview else "none"
+    if truncated:
+        preview_text = f"{preview_text} (+{truncated} more)"
+    return preview_text
+
+
+def format_resolved_config_lines(
+    header,
+    fields,
+    sample_names,
+    payload_command_actual,
+    payload_command_display,
+    preview_limit=30,
+):
+    sample_preview, sample_truncated = sample_names_preview(
+        sample_names,
+        limit=preview_limit,
+    )
+    lines = [header]
+    for key, value in fields:
+        lines.append(f"  {key}: {value}")
+    lines.append(f"  selected_sample_count: {len(sample_names)}")
+    lines.append(
+        "  selected_sample_names_preview: "
+        f"{', '.join(sample_preview) if sample_preview else 'none'}"
+    )
+    lines.append(f"  selected_sample_names_truncated: {sample_truncated}")
+    lines.append(
+        "  payload_command_actual: "
+        f"{format_preview_value(payload_command_actual, limit=5)}"
+    )
+    lines.append(
+        "  payload_command_display: "
+        f"{format_preview_value(payload_command_display, limit=5)}"
+    )
+    return lines
+
+
+def print_resolved_config(
+    header,
+    fields,
+    sample_names,
+    payload_command_actual,
+    payload_command_display,
+    preview_limit=30,
+):
+    for line in format_resolved_config_lines(
+        header=header,
+        fields=fields,
+        sample_names=sample_names,
+        payload_command_actual=payload_command_actual,
+        payload_command_display=payload_command_display,
+        preview_limit=preview_limit,
+    ):
+        print(line)
+
+
 def is_dbs_dataset_path(value):
     if not isinstance(value, str):
         return False
@@ -621,6 +701,8 @@ storage_files = StorageConfiguration(
     disable_input_streaming=False,
 )
 
+MERGE_COMMAND = "haddnano.py @outputfiles @inputfiles"
+
 # =============================================================================
 # SKIM CUT
 # =============================================================================
@@ -656,22 +738,35 @@ assert_balanced_parentheses(skim_cut, "skim_cut")
 
 try:
     cfg = read_cfg(cfg_fpath, match=MATCH)
-    print("cfg jsons:", list(cfg["jsons"].keys()))
+    print(f"cfg_json_count: {len(cfg['jsons'])}")
+    print(
+        "cfg_json_names_preview: "
+        f"{format_preview_value(list(cfg['jsons'].keys()), limit=30)}"
+    )
     cfg_jsons, sample_years_by_sample = filter_cfg_jsons_by_year(
         cfg_jsons=cfg["jsons"],
         year_filter=year_filter,
         cfg_name=CFG_NAME,
     )
-    print("selected cfg jsons:", list(sorted(cfg_jsons.keys())))
+    print(
+        "selected_cfg_json_names_preview: "
+        f"{format_preview_value(list(sorted(cfg_jsons.keys())), limit=30)}"
+    )
 
+    category_name = "processing"
+    category_cores = 1
+    category_memory = 1500
+    category_disk = 4500
     cat = Category(
-        name="processing",
-        cores=1,
-        memory=1500,
-        disk=4500,
+        name=category_name,
+        cores=category_cores,
+        memory=category_memory,
+        disk=category_disk,
     )
 
     workflows = []
+    payload_command_actual_values = []
+    payload_command_display_values = []
     mode_counts = {
         "files": 0,
         "dbs": 0,
@@ -719,6 +814,10 @@ try:
             module_name=module_name,
             out_dir=".",
         )
+        if command_string not in payload_command_actual_values:
+            payload_command_actual_values.append(command_string)
+        if display_command not in payload_command_display_values:
+            payload_command_display_values.append(display_command)
 
         print("\nActual Lobster command string:")
         print(command_string)
@@ -734,7 +833,7 @@ try:
             extra_inputs=[WRAPPER, os.path.join(sandbox_location,'src/PhysicsTools/NanoAODTools/scripts/haddnano.py')],
             outputs=["output.root"],
             command=command_string,
-            merge_command="haddnano.py @outputfiles @inputfiles",
+            merge_command=MERGE_COMMAND,
             merge_size="537M",
             globaltag=False,
             cleanup_input=False,
@@ -780,11 +879,65 @@ adv_kwargs = dict(
 if mode_counts["dbs"]:
     adv_kwargs["xrootd_servers"] = [SRC_REMOTE]
 
-print("Selected workflow input mode counts:")
-print(f"  files: {mode_counts['files']}")
-print(f"  dbs: {mode_counts['dbs']}")
-print(f"Selected storage profile: {'files' if storage is storage_files else 'dbs'}")
-print(f"xrootd_servers enabled: {str('xrootd_servers' in adv_kwargs).lower()}")
+selected_storage_profile = "files" if storage is storage_files else "dbs"
+selected_storage_mode_counts = {
+    "files": 1 if storage is storage_files else 0,
+    "dbs": 1 if storage is storage_dbs else 0,
+}
+selected_year_counts = year_counts(sample_years_by_sample)
+auto_mode_decision_summary = (
+    "per-sample dbs/files from JSON path/files metadata"
+    if INPUT_MODE == "auto"
+    else "not_used"
+)
+
+print_resolved_config(
+    header="resolved_config_header: Run 2 Lobster resolved configuration",
+    fields=[
+        ("repo_or_campaign_label", "Run 2 Lobster skimming"),
+        ("testing", TESTING),
+        ("input_mode", INPUT_MODE),
+        ("target", TARGET),
+        ("type_or_campaign_type", CAMPAIGN_TYPE),
+        ("campaign_type", CAMPAIGN_TYPE),
+        ("cfg_kind", CFG_KIND),
+        ("allow_type_cfg_mismatch", ALLOW_TYPE_CFG_MISMATCH),
+        ("cfg_name", CFG_NAME),
+        ("cfg_path", cfg_fpath),
+        ("tag", TAG),
+        ("year_policy", year_filter if year_filter is not None else "all"),
+        ("year_filter", year_filter if year_filter is not None else "all"),
+        ("workdir_path", workdir_path),
+        ("plotdir_path", plotdir_path),
+        ("output_path", output_path),
+        ("testing_mode_path_behavior", "timestamped test paths" if TESTING else "date-stamped campaign paths"),
+        ("sandbox_location", sandbox_location),
+        ("wrapper", WRAPPER),
+        ("master_label", master_label),
+        ("workflow_count", len(workflows)),
+        ("storage_profile_or_mode", selected_storage_profile),
+        ("selected_year_counts", selected_year_counts),
+        ("selected_input_mode_counts", dict(sorted(mode_counts.items()))),
+        ("selected_storage_mode_counts", selected_storage_mode_counts),
+        ("auto_mode_decision_summary", auto_mode_decision_summary),
+        ("xrootd_servers", adv_kwargs.get("xrootd_servers", "disabled")),
+        ("category_name", category_name),
+        ("category_cores", category_cores),
+        ("category_memory", category_memory),
+        ("category_disk", category_disk),
+        ("advanced_options_bad_exit_codes", adv_kwargs["bad_exit_codes"]),
+        ("advanced_options_payload", adv_kwargs["payload"]),
+        ("advanced_options_osg_version", adv_kwargs["osg_version"]),
+        ("advanced_options_log_level", adv_kwargs["log_level"]),
+        ("advanced_options_threshold_for_failure", adv_kwargs["threshold_for_failure"]),
+        ("advanced_options_threshold_for_skipping", adv_kwargs["threshold_for_skipping"]),
+        ("payload_command_display_or_none", format_preview_value(payload_command_display_values, limit=5)),
+        ("merge_command", MERGE_COMMAND),
+    ],
+    sample_names=list(sorted(cfg_jsons.keys())),
+    payload_command_actual=payload_command_actual_values,
+    payload_command_display=payload_command_display_values,
+)
 
 
 config = Config(

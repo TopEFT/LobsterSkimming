@@ -2,7 +2,7 @@
 
 ## Scope and assumptions
 
-This tutorial documents the current `run2_el9_skims` source after LOBALIGN002 (`f4f1bb2`) and LOBALIGN003 (`5815c26`). It covers the Run 2 parent repository, its independent nested `topeft` checkout, and the local Lobster framework clone in `/users/apiccine/work/LobSkim`.
+This tutorial documents the current `run2_el9_skims` source. It covers the Run 2 parent repository, its independent nested `topeft` checkout, and the local Lobster framework clone in `/users/apiccine/work/LobSkim`.
 
 The statements below are based on static source inspection. The setup installers, configuration module, wrapper, Lobster commands, Work Queue, CMSSW build, network access, and production campaign were not executed during this documentation update. Treat production behavior as unvalidated until an explicitly authorized validation round records it.
 
@@ -65,7 +65,7 @@ The canonical interpreter used for workspace diagnostics is `/users/apiccine/wor
 - skips the CMSSW installation when `CMSSW_10_6_19_patch2` already exists;
 - otherwise calls `scripts/install_cmssw.sh` with the parent path, release, and SCRAM architecture.
 
-Both installers use `set -euo pipefail` and positional-argument checks. This describes source-visible behavior only: the setup and installers were syntax/compile checked in LOBALIGN003 but were not run against GitHub, CVMFS, SCRAM, or storage.
+Both installers use `set -euo pipefail` and positional-argument checks. This describes source-visible behavior only: the setup and installers have been syntax/compile checked, but were not run against GitHub, CVMFS, SCRAM, or storage for this tutorial.
 
 ## Conda/mamba environment
 
@@ -263,6 +263,50 @@ Each selected sample becomes one workflow with hyphens replaced by underscores i
 
 The config also creates a `shlex.join` display command for logs. That display form is not passed to Lobster because parser handling of shell quoting has not been established.
 
+## lepMVA module wiring and output branches
+
+### Where lepMVA modules are defined
+
+The Run 2 installer places the CMGTools payload in the `CMSSW_10_6_19_patch2` sandbox by cloning the `104X_dev_nano_lepMVA` branch of `sscruz/cmgtools-lite` in `scripts/install_cmssw.sh`. In the current local payload:
+
+- `CMSSW_10_6_19_patch2/src/CMGTools/TTHAnalysis/python/tools/nanoAOD/LepMVAULFriend.py` defines `LepMVAFriend` and the factories `lepMVA_2016`, `lepMVA_2016APV`, `lepMVA_2017`, and `lepMVA_2018`.
+- `CMSSW_10_6_19_patch2/src/CMGTools/TTHAnalysis/python/tools/nanoAOD/ttH_modules.py` imports those four factories, making them available through `CMGTools.TTHAnalysis.tools.nanoAOD.ttH_modules` when `nano_postproc.py` processes `-I`.
+
+The factories are selected by name when `nano_postproc.py` starts the postprocessing job; they are not defined by sample cfg or JSON metadata.
+
+### How lepMVA is selected and wired into nano_postproc.py
+
+The wiring is per sample and follows this path:
+
+1. `select_module_name` in `skimmer/lobster_config.py` maps the normalized JSON `year` to `lepMVA_2016APV`, `lepMVA_2016`, `lepMVA_2017`, or `lepMVA_2018`.
+2. `build_payload_command` adds `--module <module_name>` to the exact string assigned to `Workflow(command=command_string)`.
+3. `skimmer/skim_wrapper.py` parses `--module` and constructs `nano_postproc.py -I CMGTools.TTHAnalysis.tools.nanoAOD.ttH_modules lepJetBTagDeepFlav,<module>`.
+4. NanoAODTools imports the named factories from `ttH_modules.py` and runs `lepJetBTagDeepFlav` followed by the selected lepMVA factory.
+
+Module selection is year-based, independent of `INPUT_MODE`, and performed separately for every selected sample. The `YEAR` campaign filter can reduce the selected samples, but each remaining sample's JSON `year` still determines its module.
+
+### How to remove lepMVA from the processing chain
+
+There is no supported user knob that disables lepMVA. Removing it requires a reviewed source change to the module list assembled in `skimmer/skim_wrapper.py`: remove the selected `<module>` from `lepJetBTagDeepFlav,<module>` while deciding explicitly whether `lepJetBTagDeepFlav` remains. If `--module` is no longer needed, update its parser requirement and the `build_payload_command` call in `skimmer/lobster_config.py` in the same change so the wrapper contract remains consistent.
+
+Do not remove lepMVA by editing sample cfg or JSON files. Those files select samples and provide the year used to choose a variant; the processing chain itself is wired through the config-to-wrapper command path. Do not delete or edit CMGTools files merely to skip the module.
+
+### Where lepMVA output branch names are defined
+
+`LepMVAULFriend.py` owns the output schema. `LepMVAFriend.beginFile` declares `Electron_mvaTTHUL` and `Muon_mvaTTHUL` from the format string `<collection>_mvaTTHUL`; `analyze` fills those same names. Neither `lobster_config.py` nor `skim_wrapper.py` passes an output branch name.
+
+### When to change lepMVA output branch names
+
+Change these names only for an intentional output-schema change. Make the declaration and fill keys agree in `LepMVAULFriend.py`; do not try to rename them in the Lobster control config. A rename can affect downstream plotting and analysis code, friend trees, selections, and compatibility with existing skim outputs. Update all downstream consumers and validate a small local output through a separately approved workflow before launching a campaign.
+
+### Source checklist before changing lepMVA behavior
+
+- `skimmer/lobster_config.py`: `select_module_name`, `build_payload_command`, and `Workflow(command=...)`.
+- `skimmer/skim_wrapper.py`: `--module` parsing and the `nano_postproc.py -I` argument list.
+- `CMSSW_10_6_19_patch2/src/CMGTools/TTHAnalysis/python/tools/nanoAOD/ttH_modules.py`: imported module factories and the additional `lepJetBTagDeepFlav` module.
+- `CMSSW_10_6_19_patch2/src/CMGTools/TTHAnalysis/python/tools/nanoAOD/LepMVAULFriend.py`: factory variants, branch declarations, and branch fills.
+- Downstream consumers of `Electron_mvaTTHUL` and `Muon_mvaTTHUL` before any schema change.
+
 ## skim_wrapper.py behavior
 
 The wrapper parses one or more positional input files plus `--cut`, `--module`, and optional `--out-dir` (default `.`). It:
@@ -279,7 +323,7 @@ The script is Python-2-style source. It does not validate that `--cut` or `--mod
 
 ## Work Queue and Lobster runbook
 
-These commands are user-supplied and source-visible documentation, not commands executed during this Codex documentation round. They still require an explicitly authorized production round before use.
+These commands are user-supplied and source-visible documentation, not commands executed while preparing this tutorial. They still require an explicitly authorized production round before use.
 
 Run the factory and Lobster commands from the Run 2 `skimmer/` directory, where `lobster_config.py`, `factory_skim.json`, and `with_oasis_certs` are expected to be visible as working files. This records the working-directory assumption for the user-supplied `lobster process lobster_config.py` command; do not rewrite it as `lobster process skimmer/lobster_config.py` without a separate source-backed change.
 
@@ -342,7 +386,7 @@ Run the Lobster command from the same `skimmer/` directory assumption unless a f
 
 Non-goals and safety caveats:
 
-- Do not run `work_queue_factory`, `lobster process`, Condor, XRootD, DBS, setup, installer, CMSSW, or worker commands unless a separate production prompt explicitly authorizes those capabilities.
+- Do not run `work_queue_factory`, `lobster process`, Condor, XRootD, DBS, setup, installer, CMSSW, or worker commands unless a separate production procedure explicitly authorizes those capabilities.
 - Do not infer production readiness from these documented commands; setup, services, credentials, storage, and worker behavior remain unvalidated here.
 - Do not edit `factory_skim.json`, `with_oasis_certs`, wrapper code, setup scripts, sample cfgs, or nested `topeft` merely to match this runbook.
 - Run 2 uses `--runos cc7-wq-7.11.1`; Run 3 uses `--runos al9-wq-7.11.1`.

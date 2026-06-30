@@ -276,6 +276,47 @@ Each selected sample becomes one workflow with hyphens replaced by underscores i
 
 The config also creates a `shlex.join` display command for logs. That display form is not passed to Lobster because parser handling of shell quoting has not been established.
 
+## lepMVA module wiring and output branches
+
+### Where lepMVA modules are defined
+
+The Run 3 installer places the CMGTools payload in the `CMSSW_14_0_6` sandbox by cloning the `nd_run3` branch of `anpicci/topEFT_ttHMVA_Run3` in `scripts/install_cmssw.sh`. In the current local payload, `CMSSW_14_0_6/src/CMGTools/NanoProc/python/tools/nanoAOD/lepMVA_run3.py` defines the `lepMVA_run3` class and the `lepMVA` factory. The wrapper imports that file through the Python path `CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3` when `nano_postproc.py` starts.
+
+The imported file defines `lepMVA`; it does not define the fallback names `lepMVA_2016_preVFP`, `lepMVA_2016`, `lepMVA_2017`, or `lepMVA_2018` returned by the current config for older sample names. Static inspection therefore supports the `2022`/`2023` Run 3 path, but not those fallback names through this import path.
+
+### How lepMVA is selected and wired into nano_postproc.py
+
+The wiring is per sample and follows this path:
+
+1. `select_module_name` in `skimmer/lobster_config.py` returns `lepMVA` when the sample name contains `2022` or `2023`; it returns older year-specific names for matching UL names and defaults to `lepMVA_2016` otherwise.
+2. `build_payload_command` adds `--module <module_name>` to the exact string assigned to `Workflow(command=command_string)`.
+3. `skimmer/skim_wrapper.py` requires and parses `--module`, then constructs `nano_postproc.py -I CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3 <module>`.
+4. For current Run 3 sample names, NanoAODTools imports and runs the `lepMVA` factory from `lepMVA_run3.py`.
+
+Selection is based on the sample-name string, not JSON `year` or `INPUT_MODE`. The selected cfg and `MATCH` determine which sample names reach this logic.
+
+### How to remove lepMVA from the processing chain
+
+There is no supported user knob that disables lepMVA. Removing it requires a reviewed source change to the `-I CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3 <module>` arguments assembled in `skimmer/skim_wrapper.py`. If `--module` is no longer needed, update its parser requirement and the `build_payload_command` call in `skimmer/lobster_config.py` in the same change so the wrapper contract remains consistent.
+
+Do not remove lepMVA by editing sample cfg or JSON files. Sample names choose the module variant, but the processing chain itself is wired through the config-to-wrapper command path. Do not delete or edit the CMGTools module merely to skip it.
+
+### Where lepMVA output branch names are defined
+
+`lepMVA_run3.py` owns the output schema. The `lepMVA_run3` constructor defaults `suffix="run3"` and builds `self.branches` as `Electron_mvaTTH<suffix>` and `Muon_mvaTTH<suffix>`. The current `lepMVA` factory does not override that suffix, so it declares `Electron_mvaTTHrun3` and `Muon_mvaTTHrun3`. `beginFile` passes `self.branches` to `declareOutput`, and `analyze` fills matching keys. Neither `lobster_config.py` nor `skim_wrapper.py` passes a branch name or suffix.
+
+### When to change lepMVA output branch names
+
+Change these names only for an intentional output-schema change. Prefer changing the `suffix` supplied by the `lepMVA` factory in `lepMVA_run3.py`; if the branch expressions themselves change, keep `self.branches`, the `analyze` result keys, and object attributes consistent. Do not try to rename them in the Lobster control config. A rename can affect downstream plotting and analysis code, friend trees, selections, and compatibility with existing skim outputs. Update all downstream consumers and validate a small local output through a separately approved workflow before launching a campaign.
+
+### Source checklist before changing lepMVA behavior
+
+- `skimmer/lobster_config.py`: `select_module_name`, `build_payload_command`, and `Workflow(command=...)`.
+- `skimmer/skim_wrapper.py`: required `--module` parsing and the `nano_postproc.py -I` argument list.
+- `CMSSW_14_0_6/src/CMGTools/NanoProc/python/tools/nanoAOD/lepMVA_run3.py`: class, factory, model files, branch declarations, and branch fills.
+- `CMSSW_14_0_6/src/CMGTools/NanoProc/python/tools/nanoAOD/friendVariableProducerTools.py`: `declareOutput` and `writeOutput` helpers used by the module.
+- Downstream consumers of `Electron_mvaTTHrun3` and `Muon_mvaTTHrun3` before any schema change.
+
 ## skim_wrapper.py behavior
 
 The wrapper parses one or more positional input files plus required `--cut`, required `--module`, optional `--out-dir` (default `.`), and optional `--nevents`.

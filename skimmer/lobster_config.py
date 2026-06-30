@@ -185,6 +185,86 @@ def build_payload_command(wrapper, skim_cut, module_name, out_dir):
     return command_string, display_command
 
 
+def sample_names_preview(sample_names, limit=30):
+    names = [str(name) for name in sample_names]
+    preview = names[:limit]
+    truncated = max(len(names) - len(preview), 0)
+    return preview, truncated
+
+
+def count_values(values):
+    counts = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def format_preview_value(values, limit=30):
+    if values is None:
+        items = []
+    elif isinstance(values, (list, tuple)):
+        items = list(values)
+    else:
+        items = [values]
+
+    preview, truncated = sample_names_preview(items, limit=limit)
+    preview_text = ", ".join(preview) if preview else "none"
+    if truncated:
+        preview_text = f"{preview_text} (+{truncated} more)"
+    return preview_text
+
+
+def format_resolved_config_lines(
+    header,
+    fields,
+    sample_names,
+    payload_command_actual,
+    payload_command_display,
+    preview_limit=30,
+):
+    sample_preview, sample_truncated = sample_names_preview(
+        sample_names,
+        limit=preview_limit,
+    )
+    lines = [header]
+    for key, value in fields:
+        lines.append(f"  {key}: {value}")
+    lines.append(f"  selected_sample_count: {len(sample_names)}")
+    lines.append(
+        "  selected_sample_names_preview: "
+        f"{', '.join(sample_preview) if sample_preview else 'none'}"
+    )
+    lines.append(f"  selected_sample_names_truncated: {sample_truncated}")
+    lines.append(
+        "  payload_command_actual: "
+        f"{format_preview_value(payload_command_actual, limit=5)}"
+    )
+    lines.append(
+        "  payload_command_display: "
+        f"{format_preview_value(payload_command_display, limit=5)}"
+    )
+    return lines
+
+
+def print_resolved_config(
+    header,
+    fields,
+    sample_names,
+    payload_command_actual,
+    payload_command_display,
+    preview_limit=30,
+):
+    for line in format_resolved_config_lines(
+        header=header,
+        fields=fields,
+        sample_names=sample_names,
+        payload_command_actual=payload_command_actual,
+        payload_command_display=payload_command_display,
+        preview_limit=preview_limit,
+    ):
+        print(line)
+
+
 # =============================================================================
 # VALIDATION
 # =============================================================================
@@ -269,6 +349,7 @@ storage_files = StorageConfiguration(
 )
 
 storage = storage_dbs if INPUT_MODE == "dbs" else storage_files
+MERGE_COMMAND = "haddnano.py @outputfiles @inputfiles"
 
 
 # =============================================================================
@@ -298,24 +379,32 @@ assert_balanced_parentheses(skim_cut, "skim_cut")
 
 try:
     cfg = read_cfg(cfg_fpath, match=MATCH)
-    print("cfg jsons:", list(cfg["jsons"].keys()))
+    print(f"cfg_json_count: {len(cfg['jsons'])}")
+    print(
+        "cfg_json_names_preview: "
+        f"{format_preview_value(list(cfg['jsons'].keys()), limit=30)}"
+    )
 
+    category_name = "processing"
+    category_cores = 1
+    category_memory = 1500
+    category_disk = 4500
     cat = Category(
-        name="processing",
-        cores=1,
-        memory=1500,
-        disk=4500,
+        name=category_name,
+        cores=category_cores,
+        memory=category_memory,
+        disk=category_disk,
     )
 
     workflows = []
+    payload_command_actual_values = []
+    payload_command_display_values = []
 
     for sample in sorted(cfg["jsons"]):
         jsn = cfg["jsons"][sample]
 
         print(f"Processing sample: {sample}")
-
-        for fn in jsn["files"]:
-            print(f"  {fn}")
+        print(f"  file_count: {len(jsn['files'])}")
 
         files = list(jsn["files"])
         module_name = select_module_name(sample)
@@ -339,6 +428,10 @@ try:
             module_name=module_name,
             out_dir=".",
         )
+        if command_string not in payload_command_actual_values:
+            payload_command_actual_values.append(command_string)
+        if display_command not in payload_command_display_values:
+            payload_command_display_values.append(display_command)
 
         print("\nActual Lobster command string:")
         print(command_string)
@@ -354,7 +447,7 @@ try:
             extra_inputs=[WRAPPER],
             outputs=["output.root"],
             command=command_string,
-            merge_command="haddnano.py @outputfiles @inputfiles",
+            merge_command=MERGE_COMMAND,
             merge_size="537M",
             globaltag=False,
             cleanup_input=False,
@@ -386,6 +479,63 @@ adv_kwargs = dict(
 
 if INPUT_MODE == "dbs":
     adv_kwargs["xrootd_servers"] = [SRC_REMOTE]
+
+selected_input_mode_counts = {INPUT_MODE: len(workflows)}
+selected_storage_profile = "dbs" if storage is storage_dbs else "files"
+selected_storage_mode_counts = {
+    "files": 1 if storage is storage_files else 0,
+    "dbs": 1 if storage is storage_dbs else 0,
+}
+selected_year_counts = {YEAR: len(workflows)}
+
+print_resolved_config(
+    header="resolved_config_header: Run 3 Lobster resolved configuration",
+    fields=[
+        ("repo_or_campaign_label", "Run 3 Lobster skimming"),
+        ("testing", TESTING),
+        ("input_mode", INPUT_MODE),
+        ("input_mode_allowed_values_current_source", "dbs, files"),
+        ("auto_mode_status", "intended_not_implemented"),
+        ("auto_mode_status_not_implemented", "intended_not_implemented"),
+        ("target", TARGET),
+        ("type_or_campaign_type", TYPE),
+        ("type", TYPE),
+        ("year", YEAR),
+        ("run_period", YEAR),
+        ("cfg_name", CFG_NAME),
+        ("derived_cfg_name_from_type_year", CFG_NAME),
+        ("cfg_path", cfg_fpath),
+        ("tag", TAG),
+        ("workdir_path", workdir_path),
+        ("plotdir_path", plotdir_path),
+        ("output_path", output_path),
+        ("testing_mode_path_behavior", "timestamped test paths" if TESTING else "date-stamped campaign paths"),
+        ("sandbox_location", sandbox_location),
+        ("wrapper", WRAPPER),
+        ("master_label", master_label),
+        ("workflow_count", len(workflows)),
+        ("storage_profile_or_mode", selected_storage_profile),
+        ("selected_year_counts", selected_year_counts),
+        ("selected_input_mode_counts", selected_input_mode_counts),
+        ("selected_storage_mode_counts", selected_storage_mode_counts),
+        ("xrootd_servers", adv_kwargs.get("xrootd_servers", "disabled")),
+        ("category_name", category_name),
+        ("category_cores", category_cores),
+        ("category_memory", category_memory),
+        ("category_disk", category_disk),
+        ("advanced_options_bad_exit_codes", adv_kwargs["bad_exit_codes"]),
+        ("advanced_options_payload", adv_kwargs["payload"]),
+        ("advanced_options_osg_version", adv_kwargs["osg_version"]),
+        ("advanced_options_log_level", adv_kwargs["log_level"]),
+        ("advanced_options_threshold_for_failure", adv_kwargs["threshold_for_failure"]),
+        ("advanced_options_threshold_for_skipping", adv_kwargs["threshold_for_skipping"]),
+        ("payload_command_display_or_none", format_preview_value(payload_command_display_values, limit=5)),
+        ("merge_command", MERGE_COMMAND),
+    ],
+    sample_names=list(sorted(cfg["jsons"].keys())),
+    payload_command_actual=payload_command_actual_values,
+    payload_command_display=payload_command_display_values,
+)
 
 
 config = Config(

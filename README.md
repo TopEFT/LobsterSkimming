@@ -11,6 +11,6 @@ Important boundaries:
 - `topeft/` is an independent nested Git repository, not a disposable untracked directory of this parent repository. Do not clean, reset, delete, or absorb it from the parent.
 - Fresh setup selects `TopEFT/topeft` branch/tag `run3_test_mmerged`. Existing local checkouts may be on `run3_test_mmerged_anpicci`; reconciling them is a separate authorized maintenance decision.
 - Exact Work Queue factory and Lobster production commands are documented in [docs/run2_lobskim_tutorial.md](docs/run2_lobskim_tutorial.md). Local untracked factory JSON files are not canonical documentation.
-- Setup and installer behavior described in the tutorial was established by static source inspection; production/network execution was not validated by the documentation round.
+- Setup and installer behavior described in the tutorial is based on static source inspection. Production and network behavior remain unvalidated.
 
 Run 2-only post-mortem EFT reweighting notes are in [postmortem/README.md](postmortem/README.md).

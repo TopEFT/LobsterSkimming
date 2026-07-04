@@ -4,7 +4,7 @@
 
 This material is Run 2-specific. It has not been validated for Run 3. Start with the [main Run 2 LobSkim tutorial](../docs/run2_lobskim_tutorial.md) for repository, environment, campaign, and nested-`topeft` policy.
 
-`globalEFTreWeighting.py` is a local post-mortem payload derived from CMGTools-era functionality. Its exact upstream provenance and local delta are not yet fully documented, and this documentation update did not execute or validate it. Review the script and establish provenance before production use.
+`globalEFTreWeighting.py` is a local post-mortem payload derived from CMGTools-era functionality. Its exact upstream provenance and local delta are not yet fully documented, and it has no recorded runtime validation. Review the script and establish provenance before production use.
 
 ## Historical setup outline
 
@@ -14,7 +14,7 @@ These are historical requirements, not commands validated by this repository doc
 
 ## Running
 
-The previously referenced `skimmer/lobster_config_p3_post-mortem.py` example is not present in the current repository and therefore is not maintained guidance. A future post-mortem round should provide a tracked, reviewed example configuration and record:
+The previously referenced `skimmer/lobster_config_p3_post-mortem.py` example is not present in the current repository and therefore is not maintained guidance. Before this procedure is treated as supported, provide a tracked, reviewed example configuration and record:
 
 - the exact source commit and local delta for `globalEFTreWeighting.py`;
 - the supported CMSSW and CMGTools commits;

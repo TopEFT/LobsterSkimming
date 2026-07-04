@@ -4,7 +4,7 @@
 
 This tutorial documents the current `run2_el9_skims` source. It covers the Run 2 parent repository, its independent nested `topeft` checkout, and the local Lobster framework clone in `/users/apiccine/work/LobSkim`.
 
-The statements below are based on static source inspection. The setup installers, configuration module, wrapper, Lobster commands, Work Queue, CMSSW build, network access, and production campaign were not executed during this documentation update. Treat production behavior as unvalidated until an explicitly authorized validation round records it.
+The source descriptions below are based on static inspection. The setup installers, configuration module, wrapper, Lobster commands, Work Queue, CMSSW build, network access, and production campaign have no recorded Run 2 runtime validation. Treat production behavior as unvalidated until bounded evidence is recorded.
 
 Run 2 and Run 3 use different parent repositories, CMSSW releases, payloads, and campaign assumptions. Do not copy Run 3 setup values into this repository merely because the directory layouts look similar.
 
@@ -29,7 +29,7 @@ The workspace also contains a separate Run 3 parent at `/users/apiccine/work/Lob
 
 The Run 2 parent integration branch is `run2_el9_skims`. Fresh setup is configured to obtain `https://github.com/TopEFT/topeft.git` at branch/tag `run3_test_mmerged`.
 
-That fresh-setup policy and an existing local checkout are different facts. At the time of this documentation update, the nested Run 2 checkout was on `run3_test_mmerged_anpicci` at `e2e4e791...` and had a pre-existing cfg modification. Do not switch it as part of normal tutorial use. Reconciling `run3_test_mmerged` and `run3_test_mmerged_anpicci` is a separate maintenance decision requiring explicit authorization and a clean plan for local changes.
+That fresh-setup policy and an existing local checkout are different facts. The recorded workspace checkout is on `run3_test_mmerged_anpicci` at `e2e4e791...` and has a local cfg modification. Do not switch it as part of normal tutorial use. Reconciling `run3_test_mmerged` and `run3_test_mmerged_anpicci` is a separate maintenance decision requiring explicit authorization and a clean plan for local changes.
 
 Do not fetch, switch, merge, rebase, reset, clean, or stash merely to make local names match this tutorial. First identify the repository boundary and preserve local work.
 
@@ -54,7 +54,7 @@ Keep setup/build and Lobster-control concerns explicit:
 3. The worker sandbox is fixed by `sandbox_location` in `skimmer/lobster_config.py`; it is not inferred from whichever shell happens to be active.
 4. Do not mutate a shared environment to repair a campaign. Record the missing dependency and handle environment maintenance separately.
 
-The canonical interpreter used for workspace diagnostics is `/users/apiccine/work/miniconda3/envs/LobSkim/bin/python`, through `/users/apiccine/work/LobSkim/codex-run.sh`. That diagnostic policy does not prove the worker payload interpreter or production control-shell environment.
+The manager environment does not prove which interpreter the worker payload resolves inside its sandbox. Record both environments separately when validating a campaign.
 
 ## Setup overview
 
@@ -65,7 +65,7 @@ The canonical interpreter used for workspace diagnostics is `/users/apiccine/wor
 - skips the CMSSW installation when `CMSSW_10_6_19_patch2` already exists;
 - otherwise calls `scripts/install_cmssw.sh` with the parent path, release, and SCRAM architecture.
 
-Both installers use `set -euo pipefail` and positional-argument checks. This describes source-visible behavior only: the setup and installers have been syntax/compile checked, but were not run against GitHub, CVMFS, SCRAM, or storage for this tutorial.
+Both installers use `set -euo pipefail` and positional-argument checks. This describes source-visible behavior only; no GitHub, CVMFS, SCRAM, or storage execution is recorded for the current setup.
 
 ## Conda/mamba environment
 
@@ -135,11 +135,21 @@ Before requesting a production launch:
 
 The `USER KNOBS` block is the intended campaign-editing surface. Avoid changing helpers, workflow construction, storage logic, or wrapper code just to launch a different sample set. After edits, review the complete resolved configuration output produced when Lobster eventually evaluates the config; do not rely only on filenames.
 
+For common goals:
+
+- To switch campaign kind, change `TYPE` and set `CFG_NAME` to the matching data, background, or signal cfg.
+- To limit a cfg to one Run 2 period, set `YEAR` to `2016APV`, `2016`, `2017`, or `2018`; leave it empty to retain all supported years.
+- To narrow a retry or bounded check, edit `MATCH` with regexes that match cfg lines.
+- To require explicit file lists, set `INPUT_MODE="files"` and verify every selected JSON has a usable `files` list.
+- To require DBS discovery, set `INPUT_MODE="dbs"` and verify every selected JSON has a valid CMS dataset `path`.
+- To choose per-sample discovery, set `INPUT_MODE="auto"` and review the resolved DBS/files counts and storage profile.
+- To run SR-like skim cuts, change `TARGET` to `"SR"`; leave `TARGET="CR"` for the looser control-region cut.
+
 ## User knobs reference
 
 | knob | default | allowed_or_expected_values | what_it_controls | when_to_edit | risk_or_caveat | source_file |
 | --- | --- | --- | --- | --- | --- | --- |
-| `TESTING` | `False` | Boolean | Switches labels and paths to timestamped `test/lobster_skimtest_*` locations. | For a deliberately bounded test campaign. | A test-labelled path does not make submission safe or lightweight. | `skimmer/lobster_config.py` |
+| `TESTING` | `False` | Boolean | Switches labels and paths to timestamped `test/lobster_skimtest_*` locations. | For a deliberately bounded test campaign. | A test-labelled path does not make submission safe or lightweight. Timestamp-derived paths can change on a later config import. | `skimmer/lobster_config.py` |
 | `INPUT_MODE` | `"auto"` | `dbs`, `files`, `auto` (case-normalized) | Per-sample dataset type, storage profile, and `xrootd_servers`. | When all samples must use one metadata contract or automatic selection is desired. | Mixed auto campaigns select `storage_files` if any sample uses files; mixed behavior lacks production validation here. | same |
 | `PROTOCOL_LOCAL` | `"file://"` | Storage protocol understood by Lobster; current design expects `file://`. | Local input/output prefix. | Only for an intentional storage-profile change. | `file://` requires worker-visible paths and existing destination parents. | same |
 | `PROTOCOL_REMOTE` | `"root://"` | Current design expects `root://`. | Remote XRootD prefix. | Only when changing remote transport. | Endpoint reachability was not validated. | same |
@@ -172,6 +182,21 @@ The `USER KNOBS` block is the intended campaign-editing surface. Avoid changing 
 | `output_path` | `/store/user/$USER/<STEP>_<TARGET>/<TAG>/vYYMMDD` | Default Run 2 stage-out namespace | Logical output path appended to destination prefixes. | Step, target, type, day; test uses timestamp. | Confirm `$USER`, quota, permissions, and non-collision. |
 | local output URL | `file://` + local root + `//` + output path | `file:///cms/cephfs/data///store/user/$USER/...` | First files-mode stage-out method. | Protocol/root/output. | Repeated slashes are source-visible; worker filesystem must be accessible. |
 | remote output URL | `root://` + remote host + `//` + output path | `root://cmsxrootd.crc.nd.edu///store/user/$USER/...` | DBS output and files-mode fallback. | Protocol/host/output. | Not network-validated here. |
+
+## TESTING paths and config-based control
+
+`TESTING=True` changes the label, workdir, plotdir, and output path to
+minute-stamped test locations. It does not disable submission, workers,
+network access, DBS access, or storage writes.
+
+Lobster commands can identify a project by its workdir or by importing the
+original config and reading `Config.workdir`. For a generated config that will
+later be passed to `lobster terminate <config.py>`, freeze every state lookup
+value across imports, including the label, workdir, plotdir, output path,
+storage outputs, and expected `config.pkl` location. Verify those values in a
+separate import before launch. If the config can recompute a different
+timestamp, use the known workdir for `lobster status`, `lobster configure`, and
+`lobster terminate` instead.
 
 ## TYPE and CFG_NAME consistency
 
@@ -226,7 +251,7 @@ Selection is:
 
 If at least one workflow uses DBS, `AdvancedOptions.xrootd_servers` becomes `["cms-xrd-global.cern.ch"]`. The historical Lobster troubleshooting docs caution about mixed DBS/local datasets, while this current config contains explicit per-sample auto logic. Treat mixed-mode production as a current source-visible intent that still needs campaign validation.
 
-At worker level, `skim_wrapper.py` normalizes `file:` strings to `file://`, checks whether each basename already exists locally, and otherwise invokes `xrdcp -f` as a last-resort stage-in. No real XRootD behavior was tested in this documentation round.
+At worker level, `skim_wrapper.py` normalizes `file:` strings to `file://`, checks whether each basename already exists locally, and otherwise invokes `xrdcp -f` as a last-resort stage-in. No real Run 2 XRootD validation is recorded.
 
 ## Workflow and AdvancedOptions behavior
 
@@ -319,13 +344,13 @@ The wrapper parses one or more positional input files plus `--cut`, `--module`, 
 6. Sleeps again and lists the working directory.
 7. Maps each input basename from `.root` to `_Skim.root` and invokes `python haddnano.py output.root ...`.
 
-The script is Python-2-style source. It does not validate that `--cut` or `--module` was supplied before constructing the command, and output filename derivation assumes `.root` inputs. It was not executed in this documentation round.
+The script is Python-2-style source. It does not validate that `--cut` or `--module` was supplied before constructing the command, and output filename derivation assumes `.root` inputs. No recorded Run 2 worker execution establishes this behavior end to end.
 
 ## Work Queue and Lobster runbook
 
-These commands are user-supplied and source-visible documentation, not commands executed while preparing this tutorial. They still require an explicitly authorized production round before use.
+These site-specific commands are operational examples, not evidence that the corresponding services, credentials, or paths are currently ready. Confirm them before use.
 
-Run the factory and Lobster commands from the Run 2 `skimmer/` directory, where `lobster_config.py`, `factory_skim.json`, and `with_oasis_certs` are expected to be visible as working files. This records the working-directory assumption for the user-supplied `lobster process lobster_config.py` command; do not rewrite it as `lobster process skimmer/lobster_config.py` without a separate source-backed change.
+Run the factory and Lobster commands from the Run 2 `skimmer/` directory, where `lobster_config.py`, `factory_skim.json`, and `with_oasis_certs` are expected to be visible as working files. The documented `lobster process lobster_config.py` command depends on that working directory; do not rewrite it as `lobster process skimmer/lobster_config.py` without a separate source-backed change.
 
 Preferred shell sequence:
 
@@ -376,6 +401,11 @@ Factory command details:
 - The wrapper file is `./with_oasis_certs`.
 - The wrapper is also passed as wrapper input with `--wrapper-input with_oasis_certs`.
 
+The factory is an external, operator-managed service. The Lobster config does
+not start or stop it. The operator is responsible for its credentials,
+resource profile, project-pattern match, logs, lifetime, and shutdown. Record
+factory state separately from Lobster manager state.
+
 Run 2 Lobster submission command:
 
 ```bash
@@ -391,12 +421,12 @@ Non-goals and safety caveats:
 - Do not edit `factory_skim.json`, `with_oasis_certs`, wrapper code, setup scripts, sample cfgs, or nested `topeft` merely to match this runbook.
 - Run 2 uses `--runos cc7-wq-7.11.1`; Run 3 uses `--runos al9-wq-7.11.1`.
 
-## Monitoring placeholder
+## Monitoring
 
-The exact status command remains unresolved. Use the user-approved status command only after it is supplied:
+Use the resolved project workdir when monitoring:
 
-```text
-<USER_SUPPLIED_RUN2_LOBSTER_STATUS_COMMAND>
+```bash
+lobster status <workdir>
 ```
 
 The operating record should identify `process.log`, `process.err`, `configure.log`, the resolved workdir and plotdir, factory logs, task exit codes, selected/failed/skipped counts, storage failures, worker resource exhaustion, and how campaign completion will be established. Submission acceptance is not campaign completion.
@@ -405,11 +435,16 @@ The operating record should identify `process.log`, `process.err`, `configure.lo
 
 First diagnose the source of failures. Preserve the workdir database and its config. Do not reset, delete, or clean project state as routine recovery.
 
-Use only a reviewed command in place of:
+Request graceful shutdown with the resolved workdir:
 
-```text
-<USER_SUPPLIED_RUN2_LOBSTER_RECOVERY_OR_CLEANUP_COMMAND>
+```bash
+lobster terminate <workdir>
 ```
+
+The request is checkpoint-based. The manager notices it in the control loop,
+stops creating new work, and exits at a later lifecycle checkpoint; tasks that
+are already running may finish first. Confirm closure from `process.log`,
+`process.err`, and process state before changing or removing project state.
 
 The framework recovery note explains that `threshold_for_failure` controls unit retries and `threshold_for_skipping` controls file-access retries. For an existing project, changes belong in the workdir copy of `config.py` and must be applied through the supported Lobster configuration workflow. Recovery must define whether the manager is running, the current counters, the root-cause fix, new thresholds, resume/finalize intent, and verification. Never infer that cleanup is safe merely because processing stopped.
 
@@ -447,7 +482,7 @@ The framework recovery note explains that `threshold_for_failure` controls unit 
 - Check for collisions, existing project state, quota, permissions, worker visibility, and endpoint policy.
 - Confirm factory logs and monitoring destinations.
 
-### production_execution_checks
+### production_run_checks
 
 - Obtain explicit approval for factory, Lobster, Condor, network, storage, and worker execution.
 - Record exact commands, host, working directory, external services, process IDs, and termination state.
@@ -483,18 +518,27 @@ Consult the local Lobster framework clone for framework-level details:
 - `/users/apiccine/work/LobSkim/lobster/docs/monitor.rst`
 - `/users/apiccine/work/LobSkim/lobster/docs/trouble.rst`
 - `/users/apiccine/work/LobSkim/lobster/docs/FailureThresholdRecovery.md`
+- `/users/apiccine/work/LobSkim/lobster/docs/operational_guidance.md`
 - `/users/apiccine/work/LobSkim/lobster/docs/StorageFileURLs.md`
 - `/users/apiccine/work/LobSkim/lobster/examples/factory.json`
 
 Some framework examples are historical or site-specific. This tutorial is the source of truth for current Run 2 branch-specific values; neither source supersedes an explicit current production authorization.
 
+## Run 2 validation scope
+
+The current Run 2 documentation records static source behavior only. There is
+no Run 2 counterpart to the one-sample worker-backed Run 3 evidence, no
+recorded Run 2 config-based termination check, and no recorded Run 2 ROOT
+content inspection. Use the stable-path guidance above when preparing a
+bounded `TESTING` config, but do not treat the Run 3 results as Run 2 evidence.
+
 ## Known caveats and intentionally unresolved items
 
 - Fresh setup selects `run3_test_mmerged`, while the observed nested checkout is `run3_test_mmerged_anpicci`; no reconciliation is prescribed here.
 - Setup/install bodies and production services remain unvalidated.
-- Exact Work Queue factory and Lobster submission commands are now documented from user-supplied text; status, recovery, cleanup, and shutdown commands remain user-supplied placeholders.
+- Work Queue factory and Lobster submission commands are site-specific and require operator review before use.
 - Local factory JSON files are untracked and noncanonical.
-- Mixed DBS/files behavior is implemented but not production-validated by this documentation round.
+- Mixed DBS/files behavior is implemented but has no recorded Run 2 runtime validation.
 - `skim_wrapper.py` is Python-2-style and relies on sandbox command resolution.
 - The setup script's existing-check logic does not validate checkout branch or installation completeness.
 - Post-mortem payload provenance and validation remain incomplete.

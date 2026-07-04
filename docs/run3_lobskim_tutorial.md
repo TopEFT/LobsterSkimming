@@ -30,7 +30,7 @@ The workspace also contains separate repositories for Run 2, Lobster, WMCore, an
 
 The Run 3 upstream branch intended to receive and host this work is `run3_mva`. The local workspace branch used for integration and local validation is `run3-mva-anpicci`; do not treat that local branch name as the long-term public branch.
 
-Fresh setup is configured to obtain `https://github.com/TopEFT/topeft.git` at branch/tag `run3_test_mmerged`. That fresh-setup policy and an existing local checkout are different facts. At the time of this documentation update, the nested Run 3 checkout was on `run3_test_mmerged_anpicci` at `06f84d838f3aed6cc18fdd1a301b1fb5fb651624` and had a pre-existing cfg modification. Do not switch it as part of normal tutorial use. Reconciling `run3_test_mmerged` and `run3_test_mmerged_anpicci` is a separate maintenance decision requiring explicit authorization and a clean plan for local changes.
+Fresh setup is configured to obtain `https://github.com/TopEFT/topeft.git` at branch/tag `run3_test_mmerged`. That fresh-setup policy and an existing local checkout are different facts. The recorded workspace checkout is on `run3_test_mmerged_anpicci` at `06f84d838f3aed6cc18fdd1a301b1fb5fb651624` and has a local cfg modification. Do not switch it as part of normal tutorial use. Reconciling `run3_test_mmerged` and `run3_test_mmerged_anpicci` is a separate maintenance decision requiring explicit authorization and a clean plan for local changes.
 
 Do not fetch, switch, merge, rebase, reset, clean, or stash merely to make local names match this tutorial. First identify the repository boundary and preserve local work.
 
@@ -55,7 +55,7 @@ Keep setup/build and Lobster-control concerns explicit:
 3. The worker sandbox is fixed by `sandbox_location` in `skimmer/lobster_config.py`; it is not inferred from whichever shell happens to be active.
 4. Do not mutate a shared environment to repair a campaign. Record the missing dependency and handle environment maintenance separately.
 
-The canonical interpreter used for workspace diagnostics is `/users/apiccine/work/miniconda3/envs/LobSkim/bin/python`, through `/users/apiccine/work/LobSkim/codex-run.sh`. That diagnostic policy does not prove the worker payload interpreter or production control-shell environment.
+The manager environment does not prove which interpreter the worker payload resolves inside its sandbox. Record both environments separately when validating a campaign.
 
 ## Setup overview
 
@@ -66,7 +66,7 @@ The canonical interpreter used for workspace diagnostics is `/users/apiccine/wor
 - skips the CMSSW installation when `CMSSW_14_0_6` already exists;
 - otherwise calls `scripts/install_cmssw.sh` with the parent path, release, and SCRAM architecture.
 
-Both shell installers use `set -euo pipefail` and positional-argument checks. This describes source-visible behavior only. The setup and installers were read statically; they were not run against GitHub, CVMFS, SCRAM, or storage in this documentation round.
+Both shell installers use `set -euo pipefail` and positional-argument checks. This describes source-visible behavior only; no GitHub, CVMFS, SCRAM, or storage execution is recorded for the current setup.
 
 ## Conda/mamba environment
 
@@ -228,7 +228,7 @@ Only `SR` and `CR` are valid. Both require at least two selected electrons, muon
 
 The current source accepts all three modes. A DBS path must have `/PrimaryDataset/ProcessedDataset/DataTier` form with a recognized CMS data tier; `/store/...`, `root://...`, `file://...`, and other absolute storage paths are not DBS dataset names. Explicit `files` and `dbs` validate their required metadata. In `auto`, a valid DBS path wins when both inputs are usable, matching the Run 2 policy; otherwise the config uses files. Missing or unusable metadata fails with the sample, cfg path, requested mode, available keys, and a bounded metadata summary.
 
-The mixed `auto` policy is source-defined and covered by lightweight helper/static validation. No real same-context cfg containing both DBS-backed and files-backed samples was found, so mixed `auto` has not been exercised in a Lobster runtime. Before using mixed files/DBS `auto` campaigns for production, run an explicitly approved validation round that checks Lobster, Work Queue, storage, XRootD, and DBS behavior.
+The mixed `auto` policy is source-defined and covered by lightweight helper/static validation. No real same-context cfg containing both DBS-backed and files-backed samples was found, so mixed `auto` has not been exercised in a Lobster runtime. Before using mixed files/DBS `auto` campaigns for production, run a bounded validation that checks Lobster, Work Queue, storage, XRootD, and DBS behavior.
 
 Each selected JSON should also carry analysis metadata such as `year`, `isData`, `xsec`, event counts, and weight sums. The current Run 3 config consumes `files` and `path` for input construction; it does not enforce or filter on JSON `year`.
 
@@ -341,13 +341,13 @@ It then:
 8. Maps each input basename from `.root` to `_Skim.root`.
 9. Invokes `haddnano.py output.root <skimmed_files>`.
 
-The wrapper does not run `haddnano.py` through `python`; it calls `haddnano.py` directly. It does not validate that the expected `_Skim.root` files exist before merge. It was not executed in this documentation round.
+The wrapper does not run `haddnano.py` through `python`; it calls `haddnano.py` directly. It does not validate that the expected `_Skim.root` files exist before merge. Recorded worker execution is limited to the two bounded cases below.
 
 ## Work Queue and Lobster runbook
 
-These commands are user-supplied and source-visible documentation, not commands executed during this documentation update. They still require an explicitly authorized production round before use.
+These site-specific commands are operational examples, not evidence that the corresponding services, credentials, or paths are currently ready. Confirm them before use.
 
-Run the factory and Lobster commands from the Run 3 `skimmer/` directory, where `lobster_config.py`, `factory_skim.json`, and `with_oasis_certs` are expected to be visible as working files. This records the working-directory assumption for the user-supplied `lobster process lobster_config.py` command; do not rewrite it as `lobster process skimmer/lobster_config.py` without a separate source-backed change.
+Run the factory and Lobster commands from the Run 3 `skimmer/` directory, where `lobster_config.py`, `factory_skim.json`, and `with_oasis_certs` are expected to be visible as working files. The documented `lobster process lobster_config.py` command depends on that working directory; do not rewrite it as `lobster process skimmer/lobster_config.py` without a separate source-backed change.
 
 Preferred shell sequence:
 
@@ -398,6 +398,11 @@ Factory command details:
 - The wrapper file is `./with_oasis_certs`.
 - The wrapper is also passed as wrapper input with `--wrapper-input with_oasis_certs`.
 
+The factory is an external, operator-managed service. The Lobster config does
+not start or stop it. The operator is responsible for its credentials,
+resource profile, project-pattern match, logs, lifetime, and shutdown. Record
+factory state separately from Lobster manager state.
+
 Run 3 Lobster submission command:
 
 ```bash
@@ -425,12 +430,12 @@ Non-goals and safety caveats:
 
 Treat it as a source-controlled resource profile, not as a complete or validated factory launch command.
 
-## Monitoring placeholder
+## Monitoring
 
-The exact status command remains unresolved. Use the user-approved status command only after it is supplied:
+Use the resolved project workdir when monitoring:
 
-```text
-<USER_SUPPLIED_RUN3_LOBSTER_STATUS_COMMAND>
+```bash
+lobster status <workdir>
 ```
 
 The operating record should identify `process.log`, `process.err`, `configure.log`, the resolved workdir and plotdir, factory logs, task exit codes, selected/failed/skipped counts, storage failures, worker resource exhaustion, and how campaign completion will be established. Submission acceptance is not campaign completion.
@@ -439,11 +444,16 @@ The operating record should identify `process.log`, `process.err`, `configure.lo
 
 First diagnose the source of failures. Preserve the workdir database and its config. Do not reset, delete, or clean project state as routine recovery.
 
-Use only a reviewed command in place of:
+Request graceful shutdown with the resolved workdir:
 
-```text
-<USER_SUPPLIED_RUN3_LOBSTER_RECOVERY_OR_CLEANUP_COMMAND>
+```bash
+lobster terminate <workdir>
 ```
+
+The request is checkpoint-based. The manager notices it in the control loop,
+stops creating new work, and exits at a later lifecycle checkpoint; tasks that
+are already running may finish first. Confirm closure from `process.log`,
+`process.err`, and process state before changing or removing project state.
 
 The framework recovery note explains that `threshold_for_failure` controls unit retries and `threshold_for_skipping` controls file-access retries. For an existing project, changes belong in the workdir copy of `config.py` and must be applied through the supported Lobster configuration workflow. Recovery must define whether the manager is running, the current counters, the root-cause fix, new thresholds, resume/finalize intent, and verification. Never infer that cleanup is safe merely because processing stopped.
 
@@ -514,6 +524,7 @@ Consult the local Lobster framework clone for framework-level details:
 - `/users/apiccine/work/LobSkim/lobster/docs/monitor.rst`
 - `/users/apiccine/work/LobSkim/lobster/docs/trouble.rst`
 - `/users/apiccine/work/LobSkim/lobster/docs/FailureThresholdRecovery.md`
+- `/users/apiccine/work/LobSkim/lobster/docs/operational_guidance.md`
 - `/users/apiccine/work/LobSkim/lobster/docs/StorageFileURLs.md`
 - `/users/apiccine/work/LobSkim/lobster/examples/factory.json`
 
@@ -526,28 +537,28 @@ A sequence of bounded checks established the following scoped evidence for the c
 | behavior | evidence and scope | result |
 | --- | --- | --- |
 | Canonical cfg, input-mode, and lepMVA resolution | Static helper checks used representative Run 3 metadata. | Source-defined behavior passed the bounded matrix checks. |
-| Explicit files runtime preparation | One diagnostics-only `TESTING=True` signal config used real files metadata with no workers. | Lobster prepared the files-backed workflow successfully. |
-| Explicit DBS runtime preparation | One diagnostics-only `TESTING=True` data config used an internal single-dataset DBS query with no workers. | Lobster prepared the DBS-backed workflow successfully. |
-| Auto DBS worker execution | The check selected only `EGamma_0_V1_Run2023D-22Sep2023` with `TYPE="data"`, `YEAR="2023BPix"`, and `INPUT_MODE="auto"`. | Auto resolved to DBS; a worker task completed successfully and produced a ROOT output under diagnostics. |
-| Auto files worker execution | The check selected only `tHq_2022EE` with `TYPE="signal"`, `YEAR="2022EE"`, and `INPUT_MODE="auto"`. | Auto resolved to files; worker tasks completed successfully and produced ROOT outputs under diagnostics. |
+| Explicit files runtime preparation | One isolated `TESTING=True` signal config used real files metadata with no workers. | Lobster prepared the files-backed workflow successfully. |
+| Explicit DBS runtime preparation | One isolated `TESTING=True` data config used a single-dataset DBS query with no workers. | Lobster prepared the DBS-backed workflow successfully. |
+| Auto DBS worker execution | The check selected only `EGamma_0_V1_Run2023D-22Sep2023` with `TYPE="data"`, `YEAR="2023BPix"`, and `INPUT_MODE="auto"`. | Auto resolved to DBS; a worker task completed successfully and produced a ROOT output in the dedicated validation area. |
+| Auto files worker execution | The check selected only `tHq_2022EE` with `TYPE="signal"`, `YEAR="2022EE"`, and `INPUT_MODE="auto"`. | Auto resolved to files; worker tasks completed successfully and produced ROOT outputs in the dedicated validation area. |
 | Stable validation config paths | Each generated config was imported twice in isolated processes and its state-relevant values were compared. | Tag/label, workdir, plotdir, output, storage output, selected sample, and expected `config.pkl` location were stable across re-imports. |
 | Terminate by config | `lobster terminate <generated_config>` was invoked after task-completion/output evidence. | The first invocation returned zero for both cases; both managers exited gracefully without a local OS signal. |
 
-The configs were temporary diagnostics-only copies, each selected exactly one sample, and all active workdir, plot, output, and `file://` stageout paths were under a fresh diagnostics directory. Workers came from an already-running, user-provided `work_queue_factory`. The factory was started and managed separately by the user; the validation only used its available workers. Work Queue manager catalog advertisement occurred because no source-supported disable option was found; that advertisement was specifically authorized for the validation.
+The configs were temporary validation copies, each selected exactly one sample, and all active workdir, plot, output, and `file://` stageout paths were under a dedicated validation directory. Workers came from an already-running, operator-managed `work_queue_factory`. The factory was started and managed separately; the validation only used its available workers. Work Queue manager catalog advertisement occurred because no source-supported disable option was found.
 
 For generated `TESTING` configs that must later be passed to `lobster terminate <config>`, keep every state-lookup value deterministic across imports. In particular, freeze the tag or label and the derived workdir, plotdir, output, storage output, and `config.pkl` location. Verify those resolved values in isolated re-imports before processing. A config that recomputes timestamped paths on import can cause the terminate command to look in a different workdir.
 
 Termination is checkpoint-based rather than instantaneous. Terminate was requested shortly after the first success evidence, but the managers exited at a later lifecycle checkpoint and already-running tasks were allowed to finish.
 
-The user manually inspected one representative auto-DBS output, `output_10.root`. That file contained `Events`, `LuminosityBlocks`, and `Runs` trees; `Events` had 7,230 entries; and the `Electron_mvaTTHrun3` and `Muon_mvaTTHrun3` branches were present. This was a representative manual inspection, not an automated content scan of every output or a physics-correctness validation.
+A representative manual inspection of auto-DBS output `output_10.root` found `Events`, `LuminosityBlocks`, and `Runs` trees; `Events` had 7,230 entries; and the `Electron_mvaTTHrun3` and `Muon_mvaTTHrun3` branches were present. This was not an automated content scan of every output or a physics-correctness validation.
 
-An earlier attempt exposed timestamp-dependent generated-config lookup: re-importing a config could resolve a different workdir and prevent config-based termination. The final checks used fixed state paths in diagnostics-only configs, confirmed graceful manager closure, and demonstrated successful config-based termination. Repository source was not changed to implement this validation setup.
+An earlier attempt exposed timestamp-dependent generated-config lookup: re-importing a config could resolve a different workdir and prevent config-based termination. The final checks used fixed state paths in isolated configs, confirmed graceful manager closure, and demonstrated successful config-based termination. Repository source was not changed to implement this validation setup.
 
 ## Known caveats and intentionally unresolved items
 
 - Fresh setup selects `run3_test_mmerged`, while the observed nested checkout is `run3_test_mmerged_anpicci`; no reconciliation is prescribed here.
 - Setup/install bodies, production storage, credentials, and campaign-scale services remain unvalidated.
-- Exact Work Queue factory and Lobster submission commands are now documented from user-supplied text; status, recovery, cleanup, and shutdown commands remain user-supplied placeholders.
+- Work Queue factory and Lobster submission commands are site-specific and require operator review before use.
 - Canonical cfg derivation intentionally does not select alternate `NDSkim_*`, CR/SR-specific, central-signal, signal-subtype, synchronization, or general cfg names. Users should not expect `TYPE` and `YEAR` to discover those files automatically; support requires a separate explicit source decision and selection design rather than a broad filename search.
 - Auto DBS and auto files each passed one-sample worker-backed `TESTING` validation. No full production or broad multi-sample throughput campaign was run. Mixed storage remains source-defined/static-validated only because no real same-context mixed candidate was found; mixed files/DBS `auto` requires a separately approved runtime validation.
 - Run 3 lepMVA selection is sample-name based. Current names containing `2022` or `2023` map to `lepMVA`; other names fail early because the wrapper import path exposes only `lepMVA`. Supporting other Run 3 sample-name conventions requires a source-backed module-selection update.

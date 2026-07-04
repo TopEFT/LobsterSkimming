@@ -4,7 +4,7 @@
 
 This tutorial documents the current Run 3 `LobsterSkimming` parent repository at `/users/apiccine/work/LobSkim/LobsterSkimming`. In this workspace, the local working branch is `run3-mva-anpicci`; the upstream branch this work is intended to land in is `run3_mva`.
 
-The statements below are based on static inspection of the current source files. The setup entry point, installer scripts, `skimmer/lobster_config.py`, `skimmer/skim_wrapper.py`, Lobster commands, Work Queue factory, CMSSW setup, network access, storage access, and production campaign were not executed during this documentation update. Treat production behavior as unvalidated until an explicitly authorized validation or production round records exact commands and results.
+The source descriptions below are based on inspection of the current files. The validation-state section separately records bounded evidence from explicit-input smoke preparation and two one-sample worker-backed `TESTING` runs. That evidence does not establish full production readiness or campaign-scale behavior.
 
 Run 3 and Run 2 live in separate parent repositories and can have different CMSSW releases, wrapper behavior, input-mode semantics, cfg naming, and campaign paths. Do not copy Run 2 values into this repository unless the current Run 3 source proves the same value.
 
@@ -228,7 +228,7 @@ Only `SR` and `CR` are valid. Both require at least two selected electrons, muon
 
 The current source accepts all three modes. A DBS path must have `/PrimaryDataset/ProcessedDataset/DataTier` form with a recognized CMS data tier; `/store/...`, `root://...`, `file://...`, and other absolute storage paths are not DBS dataset names. Explicit `files` and `dbs` validate their required metadata. In `auto`, a valid DBS path wins when both inputs are usable, matching the Run 2 policy; otherwise the config uses files. Missing or unusable metadata fails with the sample, cfg path, requested mode, available keys, and a bounded metadata summary.
 
-The mixed `auto` policy is source-defined and covered by lightweight helper/static validation, but it has not been exercised in a real Lobster campaign. Before using mixed files/DBS `auto` campaigns for production, run an explicitly approved validation round that checks Lobster, Work Queue, storage, XRootD, and DBS behavior.
+The mixed `auto` policy is source-defined and covered by lightweight helper/static validation. No real same-context cfg containing both DBS-backed and files-backed samples was found, so mixed `auto` has not been exercised in a Lobster runtime. Before using mixed files/DBS `auto` campaigns for production, run an explicitly approved validation round that checks Lobster, Work Queue, storage, XRootD, and DBS behavior.
 
 Each selected JSON should also carry analysis metadata such as `year`, `isData`, `xsec`, event counts, and weight sums. The current Run 3 config consumes `files` and `path` for input construction; it does not enforce or filter on JSON `year`.
 
@@ -409,7 +409,7 @@ Run the Lobster command from the same `skimmer/` directory assumption unless a f
 Non-goals and safety caveats:
 
 - Do not run `work_queue_factory`, `lobster process`, Condor, XRootD, DBS, setup, installer, CMSSW, or worker commands unless a separate production authorization explicitly permits those capabilities.
-- Do not infer production readiness from these documented commands; setup, services, credentials, storage, and worker behavior remain unvalidated here.
+- Do not infer production readiness from these documented commands. The bounded validation record below covers two one-sample worker-backed `TESTING` cases, not setup, credentials, production storage, throughput, or a full campaign.
 - Do not edit `factory_skim.json`, `with_oasis_certs`, wrapper code, setup scripts, sample cfgs, or nested `topeft` merely to match this runbook.
 - Run 3 uses `--runos al9-wq-7.11.1`; Run 2 uses `--runos cc7-wq-7.11.1`.
 
@@ -481,7 +481,7 @@ The framework recovery note explains that `threshold_for_failure` controls unit 
 - Check for collisions, existing project state, quota, permissions, worker visibility, and endpoint policy.
 - Confirm factory logs and monitoring destinations.
 
-### production_execution_checks
+### production_run_checks
 
 - Obtain explicit approval for factory, Lobster, Condor, network, storage, and worker execution.
 - Record exact commands, host, working directory, external services, process IDs, and termination state.
@@ -519,13 +519,39 @@ Consult the local Lobster framework clone for framework-level details:
 
 Some framework examples are historical or site-specific. This tutorial is the source of truth for current Run 3 branch-specific values; neither source supersedes an explicit current production authorization.
 
+## Bounded Run 3 validation state
+
+A sequence of bounded checks established the following scoped evidence for the current Run 3 configuration. These results are validation records, not a production campaign certification.
+
+| behavior | evidence and scope | result |
+| --- | --- | --- |
+| Canonical cfg, input-mode, and lepMVA resolution | Static helper checks used representative Run 3 metadata. | Source-defined behavior passed the bounded matrix checks. |
+| Explicit files runtime preparation | One diagnostics-only `TESTING=True` signal config used real files metadata with no workers. | Lobster prepared the files-backed workflow successfully. |
+| Explicit DBS runtime preparation | One diagnostics-only `TESTING=True` data config used an internal single-dataset DBS query with no workers. | Lobster prepared the DBS-backed workflow successfully. |
+| Auto DBS worker execution | The check selected only `EGamma_0_V1_Run2023D-22Sep2023` with `TYPE="data"`, `YEAR="2023BPix"`, and `INPUT_MODE="auto"`. | Auto resolved to DBS; a worker task completed successfully and produced a ROOT output under diagnostics. |
+| Auto files worker execution | The check selected only `tHq_2022EE` with `TYPE="signal"`, `YEAR="2022EE"`, and `INPUT_MODE="auto"`. | Auto resolved to files; worker tasks completed successfully and produced ROOT outputs under diagnostics. |
+| Stable validation config paths | Each generated config was imported twice in isolated processes and its state-relevant values were compared. | Tag/label, workdir, plotdir, output, storage output, selected sample, and expected `config.pkl` location were stable across re-imports. |
+| Terminate by config | `lobster terminate <generated_config>` was invoked after task-completion/output evidence. | The first invocation returned zero for both cases; both managers exited gracefully without a local OS signal. |
+
+The configs were temporary diagnostics-only copies, each selected exactly one sample, and all active workdir, plot, output, and `file://` stageout paths were under a fresh diagnostics directory. Workers came from an already-running, user-provided `work_queue_factory`. The factory was started and managed separately by the user; the validation only used its available workers. Work Queue manager catalog advertisement occurred because no source-supported disable option was found; that advertisement was specifically authorized for the validation.
+
+For generated `TESTING` configs that must later be passed to `lobster terminate <config>`, keep every state-lookup value deterministic across imports. In particular, freeze the tag or label and the derived workdir, plotdir, output, storage output, and `config.pkl` location. Verify those resolved values in isolated re-imports before processing. A config that recomputes timestamped paths on import can cause the terminate command to look in a different workdir.
+
+Termination is checkpoint-based rather than instantaneous. Terminate was requested shortly after the first success evidence, but the managers exited at a later lifecycle checkpoint and already-running tasks were allowed to finish.
+
+The user manually inspected one representative auto-DBS output, `output_10.root`. That file contained `Events`, `LuminosityBlocks`, and `Runs` trees; `Events` had 7,230 entries; and the `Electron_mvaTTHrun3` and `Muon_mvaTTHrun3` branches were present. This was a representative manual inspection, not an automated content scan of every output or a physics-correctness validation.
+
+An earlier attempt exposed timestamp-dependent generated-config lookup: re-importing a config could resolve a different workdir and prevent config-based termination. The final checks used fixed state paths in diagnostics-only configs, confirmed graceful manager closure, and demonstrated successful config-based termination. Repository source was not changed to implement this validation setup.
+
 ## Known caveats and intentionally unresolved items
 
 - Fresh setup selects `run3_test_mmerged`, while the observed nested checkout is `run3_test_mmerged_anpicci`; no reconciliation is prescribed here.
-- Setup/install bodies and production services remain unvalidated.
+- Setup/install bodies, production storage, credentials, and campaign-scale services remain unvalidated.
 - Exact Work Queue factory and Lobster submission commands are now documented from user-supplied text; status, recovery, cleanup, and shutdown commands remain user-supplied placeholders.
 - Canonical cfg derivation intentionally does not select alternate `NDSkim_*`, CR/SR-specific, central-signal, signal-subtype, synchronization, or general cfg names. Users should not expect `TYPE` and `YEAR` to discover those files automatically; support requires a separate explicit source decision and selection design rather than a broad filename search.
-- Auto mode and mixed storage behavior are source-defined and covered by lightweight helper/static validation, but no production campaign was run. Mixed files/DBS `auto` production requires a separately approved validation round covering Lobster, Work Queue, storage, XRootD, and DBS behavior.
+- Auto DBS and auto files each passed one-sample worker-backed `TESTING` validation. No full production or broad multi-sample throughput campaign was run. Mixed storage remains source-defined/static-validated only because no real same-context mixed candidate was found; mixed files/DBS `auto` requires a separately approved runtime validation.
 - Run 3 lepMVA selection is sample-name based. Current names containing `2022` or `2023` map to `lepMVA`; other names fail early because the wrapper import path exposes only `lepMVA`. Supporting other Run 3 sample-name conventions requires a source-backed module-selection update.
-- `skim_wrapper.py` requires runtime tools such as `xrdcp`, `nano_postproc.py`, `CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3`, and `haddnano.py`; none were executed here.
+- `skim_wrapper.py` requires runtime tools such as `xrdcp`, `nano_postproc.py`, `CMGTools.NanoProc.tools.nanoAOD.lepMVA_run3`, and `haddnano.py`. The worker payload was exercised only in the two bounded one-sample cases.
+- Physics correctness and final analysis-level event-content validation remain out of scope. The representative ROOT inspection does not replace an automated all-output content audit.
+- Graceful termination is checkpoint-based; tasks already running when termination is requested may finish before the manager exits.
 - The setup script's existing-check logic does not validate checkout branch or installation completeness.
